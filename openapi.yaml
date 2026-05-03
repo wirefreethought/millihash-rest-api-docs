@@ -1,0 +1,8 @@
+openapi: 3.1.0
+
+info:
+  title: MilliHash API
+  version: v1.0.0
+  x-logo:
+    url: logo.png
+    backgroundColor: "#FFFFFF"
