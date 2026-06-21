@@ -6,10 +6,10 @@ info:
     FR2 — Verify an Asset (POST /verify).
     FR5 — Verify a Certificate (GET /certificates/{id}/verify).
     FR6 — Check Anchor Confirmation (GET /anchors/{registrationId}, GET /anchors/{registrationId}/ots).
-    Direct public ingress only — no RapidAPI authentication. Paths per 002-api-platform dual-ingress inventory.
+    Free instance direct ingress only — no RapidAPI authentication.
 servers:
   - url: https://api.millihash.com
-    description: Production API (direct public edge)
+    description: Free instance (direct public access)
 paths:
   /verify:
     post:
@@ -22,6 +22,9 @@ paths:
       tags:
         - Public Verification
       security: []
+      servers:
+        - url: https://api.millihash.com
+          description: Free instance (direct public access)
       requestBody:
         required: true
         content:
@@ -80,6 +83,9 @@ paths:
       tags:
         - Public Verification
       security: []
+      servers:
+        - url: https://api.millihash.com
+          description: Free instance (direct public access)
       parameters:
         - name: id
           in: path
@@ -116,6 +122,9 @@ paths:
       tags:
         - Public Verification
       security: []
+      servers:
+        - url: https://api.millihash.com
+          description: Free instance (direct public access)
       parameters:
         - name: registrationId
           in: path
@@ -149,6 +158,9 @@ paths:
       tags:
         - Public Verification
       security: []
+      servers:
+        - url: https://api.millihash.com
+          description: Free instance (direct public access)
       parameters:
         - name: registrationId
           in: path

@@ -3,11 +3,10 @@ info:
   title: MilliHash Registration API
   version: 1.0.0
   description: |
-    FR1 — Register an Asset. Authenticated RapidAPI ingress only.
-    Error envelope shape published by api-platform (002-api-platform).
+    FR1 — Register an Asset. Pro instance / RapidAPI ingress only.
 servers:
   - url: https://api.millihash.com
-    description: Production API (RapidAPI authenticated ingress for FR1)
+    description: Pro instance (RapidAPI proxy ingress only)
 paths:
   /registrations:
     post:
@@ -21,6 +20,9 @@ paths:
         - Registrations
       security:
         - RapidApiKey: []
+      servers:
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       requestBody:
         required: true
         content:

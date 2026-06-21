@@ -5,10 +5,10 @@ info:
   description: |
     FR3 — View Your Registry (paginated owner listing).
     FR4 — Download a Proof Certificate (immutable PDF).
-    Authenticated RapidAPI ingress only. Error envelope from api-platform (002-api-platform).
+    Authenticated RapidAPI ingress on the pro instance only.
 servers:
   - url: https://api.millihash.com
-    description: Production API (RapidAPI authenticated ingress)
+    description: Pro instance (RapidAPI proxy ingress only)
 paths:
   /registrations:
     get:
@@ -23,6 +23,9 @@ paths:
         - Owner Portfolio
       security:
         - RapidApiKey: []
+      servers:
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: cursor
           in: query
@@ -71,6 +74,9 @@ paths:
         - Owner Portfolio
       security:
         - RapidApiKey: []
+      servers:
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: certificateId
           in: path

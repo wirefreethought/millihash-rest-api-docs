@@ -4,34 +4,45 @@ info:
   title: MilliHash API
   version: v1.0.0
   description: |
-    Public MilliHash REST API.
+    Product MilliHash REST API — all product-owned controllers documented per
+    `cross-cutting/api-contracts` (includes operator admin; excludes Actuator/springdoc).
 
-    **Authenticated endpoints** (RapidAPI ingress) require `X-RapidAPI-Key` and are used for
-    registration, owner portfolio, and API key validation.
+    MilliHash runs as **two deployments** against the same database:
 
-    **Public verification endpoints** require no authentication and support asset verification,
-    certificate verification, and Bitcoin anchor status.
+    - **Free instance** — directly reachable at `api.millihash.com`. Serves unauthenticated
+      public verification routes. RapidAPI-authenticated routes
+      (`POST/GET /registrations`, certificate download) are disabled.
+    - **Pro instance** — reachable only through the RapidAPI proxy (IP whitelist). Serves
+      RapidAPI-authenticated registration and owner-portfolio routes.
+      Public verification routes are not exposed on this deployment.
+
+    **Authenticated endpoints** require `X-RapidAPI-Key` (pro instance / RapidAPI ingress only).
+
+    **Public verification endpoints** require no authentication (free instance only).
+
+    **Operator admin** (`GET /admin/audit`) is documented below for completeness. It is served on
+    `app.millihash.com` with Auth0 JWT — not via RapidAPI or the public `api.millihash.com` marketplace edge.
   x-logo:
     url: logo.png
     backgroundColor: "#FFFFFF"
 
 servers:
   - url: https://api.millihash.com
-    description: Production API
+    description: Free instance — direct public access
+  - url: https://app.millihash.com
+    description: Operator admin console (Auth0 JWT)
 
 tags:
-  - name: Health
-    description: RapidAPI authentication probe
   - name: Registrations
-    description: Asset hash registration (authenticated)
+    description: Asset hash registration (pro / RapidAPI only)
   - name: Owner Portfolio
-    description: Owner registry and certificate download (authenticated)
+    description: Owner registry and certificate download (pro / RapidAPI only)
   - name: Public Verification
-    description: Asset, certificate, and anchor verification (unauthenticated)
+    description: Asset, certificate, and anchor verification (free instance only)
+  - name: Admin Audit
+    description: Operator audit search (Auth0 JWT on app host — not RapidAPI)
 
 paths:
-  /_health/authenticated:
-    $ref: 'openapi/authenticated-probe.openapi.yaml#/paths/~1_health~1authenticated'
   /registrations:
     get:
       $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1registrations/get'
@@ -47,16 +58,18 @@ paths:
     $ref: 'openapi/public-verification.openapi.yaml#/paths/~1anchors~1{registrationId}'
   /anchors/{registrationId}/ots:
     $ref: 'openapi/public-verification.openapi.yaml#/paths/~1anchors~1{registrationId}~1ots'
+  /admin/audit:
+    $ref: 'openapi/audit-operations.openapi.yaml#/paths/~1admin~1audit'
 
 components:
   securitySchemes:
     RapidApiKey:
       $ref: 'openapi/common.openapi.yaml#/components/securitySchemes/RapidApiKey'
+    Auth0Bearer:
+      $ref: 'openapi/audit-operations.openapi.yaml#/components/securitySchemes/Auth0Bearer'
   schemas:
     ErrorEnvelope:
       $ref: 'openapi/common.openapi.yaml#/components/schemas/ErrorEnvelope'
-    AuthenticatedProbeResponse:
-      $ref: 'openapi/authenticated-probe.openapi.yaml#/components/schemas/AuthenticatedProbeResponse'
     RegistrationCreatedResponse:
       $ref: 'openapi/registrations.openapi.yaml#/components/schemas/RegistrationCreatedResponse'
     DuplicateRegistrationResponse:
@@ -71,3 +84,5 @@ components:
       $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/AnchorStatusResponse'
     VerificationNotFound:
       $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/VerificationNotFound'
+    AuditSearchResponse:
+      $ref: 'openapi/audit-operations.openapi.yaml#/components/schemas/AuditSearchResponse'

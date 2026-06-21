@@ -1,0 +1,122 @@
+openapi: 3.1.0
+info:
+  title: MilliHash Admin Audit API (fragment)
+  version: 1.0.0
+paths:
+  /admin/audit:
+    get:
+      operationId: searchAuditEvents
+      summary: Search and filter audit events (read-only)
+      description: |
+        Operator audit console (FR10). Filters AND together; omitted parameters are wildcards.
+        Paginated; max 200 items per page. Requires Auth0 JWT with `audit:read` claim on
+        `app.millihash.com` — not a RapidAPI route.
+      tags:
+        - Admin Audit
+      servers:
+        - url: https://app.millihash.com
+          description: Operator admin console (Auth0 JWT)
+      security:
+        - Auth0Bearer: []
+      parameters:
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: hash
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{64}$'
+        - name: certificateId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching audit events (may be empty)
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/AuditSearchResponse'
+        '401':
+          description: Missing, invalid, or expired JWT
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Valid JWT but missing audit:read claim
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Audit store unavailable
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+components:
+  securitySchemes:
+    Auth0Bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Auth0 access token with audit:read claim — operator console only
+  schemas:
+    AuditSearchResponse:
+      type: object
+      required: [items, resultCount]
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [eventType, occurredAt]
+            properties:
+              eventType:
+                type: string
+              occurredAt:
+                type: string
+                format: date-time
+              hash:
+                type: string
+              certificateId:
+                type: string
+                format: uuid
+              userId:
+                type: string
+        nextPageCursor:
+          type: string
+          nullable: true
+        resultCount:
+          type: integer
+          minimum: 0
