@@ -1,0 +1,208 @@
+openapi: 3.1.0
+info:
+  title: MilliHash Owner Portfolio API
+  version: 1.0.0
+  description: |
+    FR3 — View Your Registry (paginated owner listing).
+    FR4 — Download a Proof Certificate (immutable PDF).
+    Authenticated RapidAPI ingress only. Error envelope from api-platform (002-api-platform).
+servers:
+  - url: https://api.millihash.com
+    description: Production API (RapidAPI authenticated ingress)
+paths:
+  /registrations:
+    get:
+      operationId: listOwnerRegistrations
+      summary: List Registrations owned by the authenticated user
+      description: |
+        Owner-scoped, cursor-paginated registry dashboard. Fixed page size 50.
+        Default sort: `tsaTimestamp` descending, `registrationId` ascending tie-break.
+        Optional sort: `label` ascending (Unicode root collation, case-sensitive) with `registrationId` tie-break.
+        Does not invoke FR6 anchor lookup per row (NFR2).
+      tags:
+        - Owner Portfolio
+      security:
+        - RapidApiKey: []
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque signed pagination cursor from prior `nextPageCursor`. Omit for first page.
+          schema:
+            type: string
+        - name: sort
+          in: query
+          required: false
+          description: Primary sort field. Default `tsaTimestamp`.
+          schema:
+            type: string
+            enum: [tsaTimestamp, label]
+            default: tsaTimestamp
+      responses:
+        '200':
+          description: Owner registry page
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/RegistryListingResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistryListingResponse'
+        '400':
+          description: Invalid cursor
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /certificates/{certificateId}:
+    get:
+      operationId: downloadCertificate
+      summary: Download immutable Certificate PDF
+      description: |
+        Returns byte-identical PDF issued at registration time. Owner must match stored OwnerKey.
+        Response is raw PDF bytes (not JSON).
+      tags:
+        - Owner Portfolio
+      security:
+        - RapidApiKey: []
+      parameters:
+        - name: certificateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Certificate PDF
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="millihash-certificate-6d0915e7-4f86-4f99-987e-57f8f83e8354.pdf"
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Authenticated user is not Registration owner
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Certificate / Registration not found
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+components:
+  securitySchemes:
+    RapidApiKey:
+      $ref: 'common.openapi.yaml#/components/securitySchemes/RapidApiKey'
+  schemas:
+    ErrorEnvelope:
+      $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+    OwnerKey:
+      type: object
+      required: [identityProvider, userId]
+      properties:
+        identityProvider:
+          type: string
+          example: rapidapi
+        userId:
+          type: string
+          example: usr_alice
+    RegistryListingResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/RegistryListingRow'
+        nextPageCursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for next page; null when no further pages.
+    RegistryListingRow:
+      type: object
+      required:
+        - registrationId
+        - ownerKey
+        - label
+        - hashTruncated
+        - submissionMode
+        - tsaTimestamp
+        - tsaProvider
+        - certificateUrl
+        - anchorConfirmationUrl
+      properties:
+        registrationId:
+          type: string
+          format: uuid
+        ownerKey:
+          $ref: '#/components/schemas/OwnerKey'
+        label:
+          type: string
+          nullable: true
+        hashTruncated:
+          type: string
+          description: First 8 + ellipsis + last 8 hex characters of SHA-256 hash
+          example: d41d8cd9…098f00bc
+        submissionMode:
+          type: string
+          enum: [server-computed, client-supplied]
+        tsaTimestamp:
+          type: string
+          format: date-time
+          description: UTC with millisecond precision
+        tsaProvider:
+          type: string
+        certificateUrl:
+          type: string
+          example: /certificates/6d0915e7-4f86-4f99-987e-57f8f83e8354
+        anchorConfirmationUrl:
+          type: string
+          format: uri
+          example: https://app.millihash.com/anchor/6d0915e7-4f86-4f99-987e-57f8f83e8354
+        c2pa:
+          $ref: '#/components/schemas/C2paListingMetadata'
+    C2paListingMetadata:
+      type: object
+      required:
+        - c2paClaimGenerator
+        - c2paSigningTime
+        - c2paSignerDisplayName
+        - c2paSignerTrusted
+        - c2paHasIngredients
+        - trustNotice
+      properties:
+        c2paClaimGenerator:
+          type: string
+        c2paSigningTime:
+          type: string
+        c2paSignerDisplayName:
+          type: string
+        c2paSignerTrusted:
+          type: boolean
+        c2paDigitalSourceType:
+          type: string
+        c2paHasIngredients:
+          type: boolean
+        trustNotice:
+          type: string

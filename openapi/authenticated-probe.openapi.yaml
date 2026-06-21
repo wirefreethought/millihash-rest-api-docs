@@ -1,0 +1,76 @@
+openapi: 3.1.0
+info:
+  title: MilliHash Authenticated Probe
+  version: 1.0.0
+  description: |
+    Lightweight endpoint for FR7 API Settings key validation.
+    Called by the web app through the RapidAPI gateway with X-RapidAPI-Key.
+paths:
+  /_health/authenticated:
+    get:
+      operationId: getAuthenticatedHealth
+      summary: Validate RapidAPI-authenticated ingress
+      description: |
+        Returns 200 when the request arrives with valid RapidAPI identity headers
+        (post-gateway validation). Returns 401 when authentication is missing or invalid.
+        Used exclusively for client-side key probe before local persistence (FR7-003).
+      tags:
+        - Health
+      security:
+        - RapidApiKey: []
+      responses:
+        '200':
+          description: Gateway authentication accepted; identity resolved
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedProbeResponse'
+              example:
+                status: UP
+                authenticated: true
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedProbeResponse'
+        '401':
+          description: Missing or invalid RapidAPI authentication
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                errors:
+                  - type: WftAuthorizationError
+                    code: UNAUTHORIZED
+                    message: A valid RapidAPI key is required for this endpoint.
+        '406':
+          description: Unsupported vendor MIME type in Accept header
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+components:
+  securitySchemes:
+    RapidApiKey:
+      $ref: 'common.openapi.yaml#/components/securitySchemes/RapidApiKey'
+  schemas:
+    AuthenticatedProbeResponse:
+      type: object
+      required:
+        - status
+        - authenticated
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [UP]
+        authenticated:
+          type: boolean
+          const: true
+    ErrorEnvelope:
+      $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+  headers:
+    X-RapidAPI-Host:
+      description: Required by RapidAPI proxy routing when calling from the web app
+      schema:
+        type: string
+        example: api.millihash.com

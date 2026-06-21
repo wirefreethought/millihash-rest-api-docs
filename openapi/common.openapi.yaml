@@ -1,0 +1,37 @@
+openapi: 3.1.0
+info:
+  title: MilliHash Common Components
+  version: 1.0.0
+components:
+  securitySchemes:
+    RapidApiKey:
+      type: apiKey
+      in: header
+      name: X-RapidAPI-Key
+      description: |
+        RapidAPI subscriber key. Validated by the RapidAPI gateway before the
+        request reaches MilliHash. MilliHash trusts X-RapidAPI-User injected by the gateway.
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [errors]
+      additionalProperties: false
+      properties:
+        errors:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [type, code, message]
+            additionalProperties: false
+            properties:
+              type:
+                type: string
+                description: Jackson type identifier (e.g. WftValidationError, WftAuthorizationError)
+              code:
+                type: string
+                description: Stable programmatic error code
+                pattern: '^[A-Z][A-Z0-9_]*$'
+              message:
+                type: string
+                description: Human-readable, user-safe message

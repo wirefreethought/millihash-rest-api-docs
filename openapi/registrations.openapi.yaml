@@ -1,0 +1,243 @@
+openapi: 3.1.0
+info:
+  title: MilliHash Registration API
+  version: 1.0.0
+  description: |
+    FR1 — Register an Asset. Authenticated RapidAPI ingress only.
+    Error envelope shape published by api-platform (002-api-platform).
+servers:
+  - url: https://api.millihash.com
+    description: Production API (RapidAPI authenticated ingress for FR1)
+paths:
+  /registrations:
+    post:
+      operationId: createRegistration
+      summary: Register an asset hash with RFC 3161 TSA timestamp
+      description: |
+        Synchronous registration pipeline: resolve or accept SHA-256 hash, acquire TSA token,
+        enforce global hash uniqueness, persist Registration, enqueue AnchorJob.
+        Asset bytes are never stored. Client-supplied mode accepts hash hex only (no file upload).
+      tags:
+        - Registrations
+      security:
+        - RapidApiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ServerComputedMultipartRequest'
+          application/vnd.millihash.v1+json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/ServerComputedJsonRequest'
+                - $ref: '#/components/schemas/ClientSuppliedJsonRequest'
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/ServerComputedJsonRequest'
+                - $ref: '#/components/schemas/ClientSuppliedJsonRequest'
+      responses:
+        '201':
+          description: Registration created
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/RegistrationCreatedResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationCreatedResponse'
+        '400':
+          description: Validation error (hash format, label size, client-supplied file upload)
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Duplicate hash (sequential or concurrent race)
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/DuplicateRegistrationResponse'
+        '413':
+          description: Asset or text exceeds plan limits
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: All TSA providers exhausted
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+components:
+  securitySchemes:
+    RapidApiKey:
+      $ref: 'common.openapi.yaml#/components/securitySchemes/RapidApiKey'
+  schemas:
+    ErrorEnvelope:
+      $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+    ServerComputedMultipartRequest:
+      type: object
+      required:
+        - submissionMode
+      properties:
+        submissionMode:
+          type: string
+          enum: [server-computed]
+        label:
+          type: string
+          maxLength: 200
+        mediaType:
+          type: string
+          description: Informational MIME hint
+        contentType:
+          type: string
+          enum: [binary, text]
+          default: binary
+        text:
+          type: string
+          description: Required when contentType=text (alternative to file part)
+        file:
+          type: string
+          format: binary
+          description: Raw bytes for binary server-computed mode
+    ServerComputedJsonRequest:
+      type: object
+      required:
+        - submissionMode
+        - contentType
+      properties:
+        submissionMode:
+          type: string
+          enum: [server-computed]
+        contentType:
+          type: string
+          enum: [text]
+        text:
+          type: string
+        label:
+          type: string
+    ClientSuppliedJsonRequest:
+      type: object
+      required:
+        - submissionMode
+        - hash
+      properties:
+        submissionMode:
+          type: string
+          enum: [client-supplied]
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        mediaType:
+          type: string
+        label:
+          type: string
+    RegistrationCreatedResponse:
+      type: object
+      required:
+        - registrationId
+        - hash
+        - submissionMode
+        - tsaTimestamp
+        - tsaProvider
+        - certificateUrl
+      additionalProperties: false
+      properties:
+        registrationId:
+          type: string
+          format: uuid
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        submissionMode:
+          type: string
+          enum: [server-computed, client-supplied]
+        tsaTimestamp:
+          type: string
+          format: date-time
+          description: UTC ISO-8601 with millisecond precision from TSA token
+        tsaProvider:
+          type: string
+        certificateUrl:
+          type: string
+          format: uri-reference
+        c2pa:
+          $ref: '#/components/schemas/C2paMetadata'
+    C2paMetadata:
+      type: object
+      required:
+        - c2paClaimGenerator
+        - c2paSigningTime
+        - c2paSignerDisplayName
+        - c2paSignerTrusted
+        - c2paHasIngredients
+      additionalProperties: false
+      properties:
+        c2paClaimGenerator:
+          type: string
+        c2paSigningTime:
+          type: string
+          format: date-time
+        c2paSignerDisplayName:
+          type: string
+        c2paSignerTrusted:
+          type: boolean
+        c2paDigitalSourceType:
+          type: string
+        c2paHasIngredients:
+          type: boolean
+        trustNotice:
+          type: string
+          description: |
+            Literal display string per FR1-028:
+            "C2PA signer verified against C2PA Trust List as of registration time" or
+            "C2PA signer not found on Trust List at registration time"
+    DuplicateRegistrationResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorEnvelope'
+        - type: object
+          required:
+            - existingRegistration
+          properties:
+            existingRegistration:
+              $ref: '#/components/schemas/RegistrationSummary'
+    RegistrationSummary:
+      type: object
+      required:
+        - registrationId
+        - hash
+        - submissionMode
+        - tsaTimestamp
+        - tsaProvider
+        - certificateUrl
+      properties:
+        registrationId:
+          type: string
+          format: uuid
+        hash:
+          type: string
+        submissionMode:
+          type: string
+        registrantSnapshot:
+          type: object
+          properties:
+            name:
+              type: string
+            email:
+              type: string
+        tsaTimestamp:
+          type: string
+          format: date-time
+        tsaProvider:
+          type: string
+        certificateUrl:
+          type: string

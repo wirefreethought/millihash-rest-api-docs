@@ -3,6 +3,71 @@ openapi: 3.1.0
 info:
   title: MilliHash API
   version: v1.0.0
+  description: |
+    Public MilliHash REST API.
+
+    **Authenticated endpoints** (RapidAPI ingress) require `X-RapidAPI-Key` and are used for
+    registration, owner portfolio, and API key validation.
+
+    **Public verification endpoints** require no authentication and support asset verification,
+    certificate verification, and Bitcoin anchor status.
   x-logo:
     url: logo.png
     backgroundColor: "#FFFFFF"
+
+servers:
+  - url: https://api.millihash.com
+    description: Production API
+
+tags:
+  - name: Health
+    description: RapidAPI authentication probe
+  - name: Registrations
+    description: Asset hash registration (authenticated)
+  - name: Owner Portfolio
+    description: Owner registry and certificate download (authenticated)
+  - name: Public Verification
+    description: Asset, certificate, and anchor verification (unauthenticated)
+
+paths:
+  /_health/authenticated:
+    $ref: 'openapi/authenticated-probe.openapi.yaml#/paths/~1_health~1authenticated'
+  /registrations:
+    get:
+      $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1registrations/get'
+    post:
+      $ref: 'openapi/registrations.openapi.yaml#/paths/~1registrations/post'
+  /certificates/{certificateId}:
+    $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}'
+  /verify:
+    $ref: 'openapi/public-verification.openapi.yaml#/paths/~1verify'
+  /certificates/{id}/verify:
+    $ref: 'openapi/public-verification.openapi.yaml#/paths/~1certificates~1{id}~1verify'
+  /anchors/{registrationId}:
+    $ref: 'openapi/public-verification.openapi.yaml#/paths/~1anchors~1{registrationId}'
+  /anchors/{registrationId}/ots:
+    $ref: 'openapi/public-verification.openapi.yaml#/paths/~1anchors~1{registrationId}~1ots'
+
+components:
+  securitySchemes:
+    RapidApiKey:
+      $ref: 'openapi/common.openapi.yaml#/components/securitySchemes/RapidApiKey'
+  schemas:
+    ErrorEnvelope:
+      $ref: 'openapi/common.openapi.yaml#/components/schemas/ErrorEnvelope'
+    AuthenticatedProbeResponse:
+      $ref: 'openapi/authenticated-probe.openapi.yaml#/components/schemas/AuthenticatedProbeResponse'
+    RegistrationCreatedResponse:
+      $ref: 'openapi/registrations.openapi.yaml#/components/schemas/RegistrationCreatedResponse'
+    DuplicateRegistrationResponse:
+      $ref: 'openapi/registrations.openapi.yaml#/components/schemas/DuplicateRegistrationResponse'
+    RegistryListingResponse:
+      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/RegistryListingResponse'
+    AssetVerificationResponse:
+      $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/AssetVerificationResponse'
+    CertificateVerificationResponse:
+      $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/CertificateVerificationResponse'
+    AnchorStatusResponse:
+      $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/AnchorStatusResponse'
+    VerificationNotFound:
+      $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/VerificationNotFound'

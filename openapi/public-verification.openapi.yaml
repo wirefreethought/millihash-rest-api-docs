@@ -1,0 +1,359 @@
+openapi: 3.1.0
+info:
+  title: MilliHash Public Verification API
+  version: 1.0.0
+  description: |
+    FR2 — Verify an Asset (POST /verify).
+    FR5 — Verify a Certificate (GET /certificates/{id}/verify).
+    FR6 — Check Anchor Confirmation (GET /anchors/{registrationId}, GET /anchors/{registrationId}/ots).
+    Direct public ingress only — no RapidAPI authentication. Paths per 002-api-platform dual-ingress inventory.
+servers:
+  - url: https://api.millihash.com
+    description: Production API (direct public edge)
+paths:
+  /verify:
+    post:
+      operationId: verifyAsset
+      summary: Verify an asset by file or text upload
+      description: |
+        Server-computed SHA-256 (identical normalization to FR1). Exact hash lookup.
+        No authentication. Response identical for anonymous and authenticated callers.
+        Does not re-extract C2PA from upload — echoes stored metadata only.
+      tags:
+        - Public Verification
+      security: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                contentType:
+                  type: string
+                  enum: [binary, text]
+                file:
+                  type: string
+                  format: binary
+                  description: Raw bytes when contentType=binary
+                text:
+                  type: string
+                  description: Text input when contentType=text (normalized before hash)
+              required: [contentType]
+      responses:
+        '200':
+          description: Verification hit or explicit not-found
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/AssetVerificationResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          description: Asset too large for verify edge
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limited (NFR6)
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /certificates/{id}/verify:
+    get:
+      operationId: verifyCertificate
+      summary: Verify a Certificate by ID or hash
+      description: |
+        Accepts Certificate UUID or 64-char SHA-256 hex (case-insensitive, canonicalized lowercase).
+        Validates TSA token and optional LTV chain. Never returns anchor state or PDF bytes.
+        shareableUrl always keyed by certificateId.
+      tags:
+        - Public Verification
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Certificate UUID v4 or SHA-256 hex
+      responses:
+        '200':
+          description: Verification hit or not-found
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/CertificateVerificationResponse'
+        '400':
+          description: Invalid hash format
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limited
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /anchors/{registrationId}:
+    get:
+      operationId: getAnchorStatus
+      summary: Check Bitcoin anchor confirmation state
+      description: |
+        Accepts Certificate UUID or SHA-256 hash. Returns AnchorJob snapshot.
+        Certificate validity invariant always true regardless of anchor state.
+      tags:
+        - Public Verification
+      security: []
+      parameters:
+        - name: registrationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Anchor status or not-found
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/AnchorStatusResponse'
+        '400':
+          description: Invalid hash format
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limited
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /anchors/{registrationId}/ots:
+    get:
+      operationId: downloadAnchorOts
+      summary: Download OpenTimestamps proof file
+      description: Returns raw .ots bytes when anchor state is Confirmed.
+      tags:
+        - Public Verification
+      security: []
+      parameters:
+        - name: registrationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OTS proof bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: No confirmed proof for identifier
+        '429':
+          description: Rate limited
+components:
+  schemas:
+    RegistrantSnapshot:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+    C2paMetadata:
+      type: object
+      required:
+        - c2paClaimGenerator
+        - c2paSignerTrusted
+        - trustNotice
+      properties:
+        c2paClaimGenerator:
+          type: string
+        c2paSigningTime:
+          type: string
+          format: date-time
+        c2paSignerDisplayName:
+          type: string
+        c2paSignerTrusted:
+          type: boolean
+        c2paDigitalSourceType:
+          type: string
+        c2paHasIngredients:
+          type: boolean
+        trustNotice:
+          type: string
+    AssetVerificationResponse:
+      oneOf:
+        - $ref: '#/components/schemas/AssetVerificationHit'
+        - $ref: '#/components/schemas/VerificationNotFound'
+    AssetVerificationHit:
+      type: object
+      required:
+        - hash
+        - registrantSnapshot
+        - tsaTimestamp
+        - tsaProvider
+        - submissionMode
+        - certificateVerificationUrl
+      properties:
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        registrantSnapshot:
+          $ref: '#/components/schemas/RegistrantSnapshot'
+        tsaTimestamp:
+          type: string
+          description: UTC ISO-8601 with millisecond precision
+        tsaProvider:
+          type: string
+        submissionMode:
+          type: string
+          enum: [server-computed, client-supplied]
+        submissionModeNotice:
+          type: string
+          description: Present only when submissionMode=client-supplied
+        certificateVerificationUrl:
+          type: string
+          format: uri
+        c2pa:
+          $ref: '#/components/schemas/C2paMetadata'
+    CertificateVerificationResponse:
+      oneOf:
+        - $ref: '#/components/schemas/CertificateVerificationHit'
+        - $ref: '#/components/schemas/VerificationNotFound'
+    CertificateVerificationHit:
+      type: object
+      required:
+        - certificateId
+        - hash
+        - registrantSnapshot
+        - tsaTimestamp
+        - tsaProvider
+        - submissionMode
+        - shareableUrl
+        - tsaValidation
+        - semanticsNotice
+      properties:
+        certificateId:
+          type: string
+          format: uuid
+        hash:
+          type: string
+        registrantSnapshot:
+          $ref: '#/components/schemas/RegistrantSnapshot'
+        tsaTimestamp:
+          type: string
+        tsaProvider:
+          type: string
+        submissionMode:
+          type: string
+          enum: [server-computed, client-supplied]
+        submissionModeNotice:
+          type: string
+        shareableUrl:
+          type: string
+          format: uri
+        tsaValidation:
+          $ref: '#/components/schemas/TsaValidationOutcome'
+        ltvChain:
+          type: array
+          items:
+            $ref: '#/components/schemas/LtvChainLink'
+        c2pa:
+          $ref: '#/components/schemas/C2paMetadata'
+        semanticsNotice:
+          type: string
+    TsaValidationOutcome:
+      type: object
+      required:
+        - signatureValid
+        - chainValidatedTo
+        - timeOfStampWithinSigningCertValidity
+        - revocationChecked
+      properties:
+        signatureValid:
+          type: boolean
+        chainValidatedTo:
+          type: string
+        timeOfStampWithinSigningCertValidity:
+          type: boolean
+        revocationChecked:
+          type: boolean
+          default: false
+    LtvChainLink:
+      type: object
+      required: [provider, signedAt, validationOutcome]
+      properties:
+        provider:
+          type: string
+        signedAt:
+          type: string
+          format: date-time
+        validationOutcome:
+          type: string
+          enum: [valid, invalid]
+    AnchorStatusResponse:
+      oneOf:
+        - $ref: '#/components/schemas/AnchorStatusHit'
+        - $ref: '#/components/schemas/VerificationNotFound'
+    AnchorStatusHit:
+      type: object
+      required: [state, shareableUrl, certificateStillValid]
+      properties:
+        state:
+          type: string
+          enum: [Pending, Confirmed, Failed]
+        shareableUrl:
+          type: string
+          format: uri
+        certificateStillValid:
+          type: boolean
+          const: true
+        otsBase64:
+          type: string
+        otsDownloadUrl:
+          type: string
+          format: uri
+        bitcoinBlockConfirmationTime:
+          type: string
+          format: date-time
+        bitcoinBlockConfirmationTimeNote:
+          type: string
+        estimatedConfirmationWindow:
+          type: string
+        failureReason:
+          type: string
+        attemptsExhausted:
+          type: boolean
+        totalAttempts:
+          type: integer
+          const: 4
+    VerificationNotFound:
+      type: object
+      required: [result, message]
+      properties:
+        result:
+          type: string
+          const: not_found
+        message:
+          type: string
+    ErrorEnvelope:
+      $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
