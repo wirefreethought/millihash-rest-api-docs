@@ -50,6 +50,8 @@ paths:
       $ref: 'openapi/registrations.openapi.yaml#/paths/~1registrations/post'
   /certificates/{certificateId}:
     $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}'
+  /certificates/{certificateId}/anchored:
+    $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}~1anchored'
   /verify:
     $ref: 'openapi/public-verification.openapi.yaml#/paths/~1verify'
   /certificates/{id}/verify:

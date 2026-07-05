@@ -5,10 +5,10 @@ info:
   description: |
     FR3 — View Your Registry (paginated owner listing).
     FR4 — Download a Proof Certificate (immutable PDF).
-    Authenticated RapidAPI ingress on the pro instance only.
+    Authenticated RapidAPI ingress only. Error envelope from api-platform (002-api-platform).
 servers:
   - url: https://api.millihash.com
-    description: Pro instance (RapidAPI proxy ingress only)
+    description: Production API (RapidAPI authenticated ingress)
 paths:
   /registrations:
     get:
@@ -23,9 +23,6 @@ paths:
         - Owner Portfolio
       security:
         - RapidApiKey: []
-      servers:
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: cursor
           in: query
@@ -66,17 +63,15 @@ paths:
   /certificates/{certificateId}:
     get:
       operationId: downloadCertificate
-      summary: Download immutable Certificate PDF
+      summary: Download Certificate PDF
       description: |
-        Returns byte-identical PDF issued at registration time. Owner must match stored OwnerKey.
+        Renders the Certificate PDF on demand from the Registration projection. With a fixed renderer version,
+        repeated downloads produce byte-identical PDFs. Owner must match stored OwnerKey.
         Response is raw PDF bytes (not JSON).
       tags:
         - Owner Portfolio
       security:
         - RapidApiKey: []
-      servers:
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: certificateId
           in: path
@@ -91,7 +86,12 @@ paths:
             Content-Disposition:
               schema:
                 type: string
-              example: attachment; filename="millihash-certificate-6d0915e7-4f86-4f99-987e-57f8f83e8354.pdf"
+              description: Label-based filename when Registration has a label; certificateId fallback otherwise.
+              examples:
+                labelBased:
+                  value: attachment; filename="millihash-my-asset.pdf"
+                idFallback:
+                  value: attachment; filename="millihash-certificate-6d0915e7-4f86-4f99-987e-57f8f83e8354.pdf"
           content:
             application/pdf:
               schema:
@@ -115,13 +115,75 @@ paths:
             application/vnd.millihash.v1+json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+  /certificates/{certificateId}/anchored:
+    get:
+      operationId: downloadAnchoredCertificate
+      summary: Download anchored Certificate PDF
+      description: |
+        Renders the Layer-1 + Bitcoin Anchor Certificate PDF on demand when AnchorJob is Confirmed.
+        Returns 409 ANCHOR_NOT_CONFIRMED when Pending or Failed. Owner must match stored OwnerKey.
+      tags:
+        - Owner Portfolio
+      security:
+        - RapidApiKey: []
+      parameters:
+        - name: certificateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Anchored Certificate PDF
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              examples:
+                labelBased:
+                  value: attachment; filename="millihash-anchored-my-asset.pdf"
+                idFallback:
+                  value: attachment; filename="millihash-anchored-certificate-6d0915e7-4f86-4f99-987e-57f8f83e8354.pdf"
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Authenticated user is not Registration owner
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Certificate / Registration not found
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Anchor not Confirmed
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 components:
   securitySchemes:
     RapidApiKey:
-      $ref: 'common.openapi.yaml#/components/securitySchemes/RapidApiKey'
+      type: apiKey
+      in: header
+      name: X-RapidAPI-Key
+      description: Validated at RapidAPI gateway; backend trusts injected identity headers
   schemas:
     ErrorEnvelope:
-      $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+      $ref: '../../002-api-platform/contracts/error-envelope.schema.json'
     OwnerKey:
       type: object
       required: [identityProvider, userId]
@@ -157,6 +219,7 @@ components:
         - tsaProvider
         - certificateUrl
         - anchorConfirmationUrl
+        - anchorState
       properties:
         registrationId:
           type: string
@@ -186,6 +249,13 @@ components:
           type: string
           format: uri
           example: https://app.millihash.com/anchor/6d0915e7-4f86-4f99-987e-57f8f83e8354
+        anchorState:
+          type: string
+          enum: [Pending, Confirmed, Failed]
+        anchoredCertificateUrl:
+          type: string
+          description: Present only when anchorState is Confirmed
+          example: /certificates/6d0915e7-4f86-4f99-987e-57f8f83e8354/anchored
         c2pa:
           $ref: '#/components/schemas/C2paListingMetadata'
     C2paListingMetadata:
