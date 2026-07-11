@@ -35,8 +35,10 @@ servers:
 tags:
   - name: Registrations
     description: Asset hash registration (pro / RapidAPI only)
+  - name: Project Lineage
+    description: Project create and version append (pro / RapidAPI only)
   - name: Owner Portfolio
-    description: Owner registry and certificate download (pro / RapidAPI only)
+    description: Owner registry, projects, and certificate download (pro / RapidAPI only)
   - name: Public Verification
     description: Asset, certificate, and anchor verification (free instance only)
   - name: Admin Audit
@@ -52,6 +54,20 @@ paths:
     $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}'
   /certificates/{certificateId}/anchored:
     $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}~1anchored'
+  /projects:
+    get:
+      $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1projects/get'
+    post:
+      $ref: 'openapi/project-lineage.openapi.yaml#/paths/~1projects/post'
+  /projects/{projectId}:
+    get:
+      $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1projects~1{projectId}/get'
+  /projects/{projectId}/versions:
+    post:
+      $ref: 'openapi/project-lineage.openapi.yaml#/paths/~1projects~1{projectId}~1versions/post'
+  /projects/{projectId}/chain/verify:
+    get:
+      $ref: 'openapi/public-verification.openapi.yaml#/paths/~1projects~1{projectId}~1chain~1verify/get'
   /verify:
     $ref: 'openapi/public-verification.openapi.yaml#/paths/~1verify'
   /certificates/{id}/verify:
@@ -76,6 +92,16 @@ components:
       $ref: 'openapi/registrations.openapi.yaml#/components/schemas/RegistrationCreatedResponse'
     DuplicateRegistrationResponse:
       $ref: 'openapi/registrations.openapi.yaml#/components/schemas/DuplicateRegistrationResponse'
+    ProjectCreatedResponse:
+      $ref: 'openapi/project-lineage.openapi.yaml#/components/schemas/ProjectCreatedResponse'
+    VersionAppendedResponse:
+      $ref: 'openapi/project-lineage.openapi.yaml#/components/schemas/VersionAppendedResponse'
+    ProjectListPage:
+      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/ProjectListPage'
+    ProjectDetail:
+      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/ProjectDetail'
+    ChainVerificationOutcome:
+      $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/ChainVerificationOutcome'
     RegistryListingResponse:
       $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/RegistryListingResponse'
     AssetVerificationResponse:

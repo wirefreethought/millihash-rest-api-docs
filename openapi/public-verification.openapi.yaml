@@ -6,6 +6,7 @@ info:
     FR2 — Verify an Asset (POST /verify).
     FR5 — Verify a Certificate (GET /certificates/{id}/verify).
     FR6 — Check Anchor Confirmation (GET /anchors/{registrationId}, GET /anchors/{registrationId}/ots).
+    FR15 — Verify a Project Chain (GET /projects/{projectId}/chain/verify).
     Free instance direct ingress only — no RapidAPI authentication.
 servers:
   - url: https://api.millihash.com
@@ -179,6 +180,39 @@ paths:
           description: No confirmed proof for identifier
         '429':
           description: Rate limited
+  /projects/{projectId}/chain/verify:
+    get:
+      operationId: verifyProjectChain
+      summary: Verify a project version chain
+      description: |
+        Public chain integrity verification (FR15). Validates sequential version numbers and
+        contentHash links. No authentication required.
+      tags:
+        - Public Verification
+      security: []
+      servers:
+        - url: https://api.millihash.com
+          description: Free instance (direct public access)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Chain verification outcome
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ChainVerificationOutcome'
+        '429':
+          description: Rate limited
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 components:
   schemas:
     RegistrantSnapshot:
@@ -220,6 +254,7 @@ components:
       type: object
       required:
         - hash
+        - hitType
         - registrantSnapshot
         - tsaTimestamp
         - tsaProvider
@@ -229,6 +264,20 @@ components:
         hash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: documentHash of the matched registration
+        hitType:
+          type: string
+          enum: [standalone, chain_version]
+        projectId:
+          type: string
+          format: uuid
+          description: Present when hitType is chain_version
+        versionNumber:
+          type: integer
+          description: Present when hitType is chain_version
+        chainVerifyUrl:
+          type: string
+          description: Public chain verify URL when hitType is chain_version
         registrantSnapshot:
           $ref: '#/components/schemas/RegistrantSnapshot'
         tsaTimestamp:
@@ -367,5 +416,59 @@ components:
           const: not_found
         message:
           type: string
+    ChainVerificationOutcome:
+      type: object
+      required: [projectId, status, versions]
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [valid, invalid, not_found]
+        label:
+          type: string
+          nullable: true
+        versionCount:
+          type: integer
+          nullable: true
+        message:
+          type: string
+          nullable: true
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChainVersionSummary'
+    ChainVersionSummary:
+      type: object
+      required:
+        - versionNumber
+        - registrationId
+        - documentHash
+        - contentHash
+        - certificateId
+        - tsaTimestamp
+      properties:
+        versionNumber:
+          type: integer
+        registrationId:
+          type: string
+          format: uuid
+        documentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        contentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        prevContentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          nullable: true
+        certificateId:
+          type: string
+          format: uuid
+        tsaTimestamp:
+          type: string
+          format: date-time
     ErrorEnvelope:
       $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'

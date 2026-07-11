@@ -5,11 +5,75 @@ info:
   description: |
     FR3 — View Your Registry (paginated owner listing).
     FR4 — Download a Proof Certificate (immutable PDF).
+    FR16 — List and view owner Projects with version timeline.
     Authenticated RapidAPI ingress only. Error envelope from api-platform (002-api-platform).
 servers:
   - url: https://api.millihash.com
     description: Production API (RapidAPI authenticated ingress)
 paths:
+  /projects:
+    get:
+      operationId: listOwnerProjects
+      summary: List projects owned by the authenticated user
+      description: Owner-scoped project list (FR16). Default limit 50, ordered by createdAt descending.
+      tags:
+        - Owner Portfolio
+      security:
+        - RapidApiKey: []
+      responses:
+        '200':
+          description: Project list page
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ProjectListPage'
+        '401':
+          description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /projects/{projectId}:
+    get:
+      operationId: getOwnerProject
+      summary: Get project detail with version timeline
+      description: Owner-scoped project detail (FR16) including ordered version summaries.
+      tags:
+        - Owner Portfolio
+      security:
+        - RapidApiKey: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Project detail
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetail'
+        '401':
+          description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Not project owner
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Project not found
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /registrations:
     get:
       operationId: listOwnerRegistrations
@@ -282,3 +346,81 @@ components:
           type: boolean
         trustNotice:
           type: string
+    ProjectListPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectSummary'
+    ProjectSummary:
+      type: object
+      required:
+        - projectId
+        - headVersionNumber
+        - headRegistrationId
+        - headContentHash
+        - versionCount
+        - createdAt
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        label:
+          type: string
+          nullable: true
+        headVersionNumber:
+          type: integer
+        headRegistrationId:
+          type: string
+          format: uuid
+        headContentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        versionCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    ProjectDetail:
+      type: object
+      required: [project, versions]
+      properties:
+        project:
+          $ref: '#/components/schemas/ProjectSummary'
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectVersionSummary'
+    ProjectVersionSummary:
+      type: object
+      required:
+        - registrationId
+        - certificateId
+        - versionNumber
+        - documentHash
+        - contentHash
+        - tsaTimestamp
+      properties:
+        registrationId:
+          type: string
+          format: uuid
+        certificateId:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+        documentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        contentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        prevContentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          nullable: true
+        tsaTimestamp:
+          type: string
+          format: date-time

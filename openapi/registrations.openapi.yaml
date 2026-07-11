@@ -13,8 +13,9 @@ paths:
       operationId: createRegistration
       summary: Register an asset hash with RFC 3161 TSA timestamp
       description: |
-        Synchronous registration pipeline: resolve or accept SHA-256 hash, acquire TSA token,
-        enforce global hash uniqueness, persist Registration, enqueue AnchorJob.
+        Synchronous registration pipeline: resolve or accept SHA-256 hash as `documentHash`,
+        stamp `contentHash` (equal at standalone genesis), acquire TSA token on contentHash,
+        enforce global documentHash exclusion, persist Registration, enqueue AnchorJob.
         Asset bytes are never stored. Client-supplied mode accepts hash hex only (no file upload).
       tags:
         - Registrations
@@ -62,7 +63,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '409':
-          description: Duplicate hash (sequential or concurrent race)
+          description: Duplicate hash, chain document claimed, or document already registered
           content:
             application/vnd.millihash.v1+json:
               schema:

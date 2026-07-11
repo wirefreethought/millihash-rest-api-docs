@@ -1,0 +1,200 @@
+openapi: 3.1.0
+info:
+  title: MilliHash Project Lineage API
+  version: 1.0.0
+  description: |
+    FR13 — Create a Project (genesis version).
+    FR14 — Append a Project Version.
+    Authenticated RapidAPI ingress only (pro instance).
+servers:
+  - url: https://api.millihash.com
+    description: Pro instance (RapidAPI proxy ingress only)
+paths:
+  /projects:
+    post:
+      operationId: createProject
+      summary: Create a project with genesis version
+      description: |
+        Creates a Project and version 1 Registration. Genesis `contentHash` equals `documentHash`.
+        Same multipart/JSON submission modes as FR1. Consumes one plan quota unit.
+      tags:
+        - Project Lineage
+      security:
+        - RapidApiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: 'registrations.openapi.yaml#/components/schemas/ServerComputedMultipartRequest'
+          application/vnd.millihash.v1+json:
+            schema:
+              oneOf:
+                - $ref: 'registrations.openapi.yaml#/components/schemas/ServerComputedJsonRequest'
+                - $ref: 'registrations.openapi.yaml#/components/schemas/ClientSuppliedJsonRequest'
+      responses:
+        '201':
+          description: Project created with genesis version
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ProjectCreatedResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Document hash already claimed (standalone or chain)
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+        '413':
+          description: Asset exceeds plan limits
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+        '502':
+          description: TSA providers exhausted
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+  /projects/{projectId}/versions:
+    post:
+      operationId: appendProjectVersion
+      summary: Append a version to an existing project
+      description: |
+        Appends version N+1 with chained `contentHash`. Requires optimistic concurrency header
+        `X-Project-Head-Content-Hash` matching the project's current head.
+      tags:
+        - Project Lineage
+      security:
+        - RapidApiKey: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-Project-Head-Content-Hash
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{64}$'
+          description: Expected current head contentHash for CAS
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: 'registrations.openapi.yaml#/components/schemas/ServerComputedMultipartRequest'
+          application/vnd.millihash.v1+json:
+            schema:
+              $ref: 'registrations.openapi.yaml#/components/schemas/ServerComputedJsonRequest'
+      responses:
+        '201':
+          description: Version appended
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/VersionAppendedResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Not project owner
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Project not found
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Head conflict or document hash claim rejected
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+components:
+  securitySchemes:
+    RapidApiKey:
+      $ref: 'common.openapi.yaml#/components/securitySchemes/RapidApiKey'
+  schemas:
+    ProjectCreatedResponse:
+      type: object
+      required:
+        - projectId
+        - registrationId
+        - versionNumber
+        - documentHash
+        - contentHash
+        - certificateUrl
+        - chainVerifyUrl
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        label:
+          type: string
+          nullable: true
+        registrationId:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+          const: 1
+        documentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        contentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        certificateUrl:
+          type: string
+        chainVerifyUrl:
+          type: string
+          example: /projects/{projectId}/chain/verify
+    VersionAppendedResponse:
+      type: object
+      required:
+        - projectId
+        - registrationId
+        - versionNumber
+        - documentHash
+        - contentHash
+        - headContentHash
+        - certificateUrl
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        registrationId:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+          minimum: 2
+        documentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        contentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        headContentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        certificateUrl:
+          type: string
