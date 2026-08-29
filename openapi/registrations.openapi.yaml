@@ -3,7 +3,7 @@ info:
   title: MilliHash Registration API
   version: 1.0.0
   description: |
-    FR1 — Register an Asset. Pro instance / RapidAPI ingress only.
+    Register an asset. Pro instance / RapidAPI ingress only.
 servers:
   - url: https://api.millihash.com
     description: Pro instance (RapidAPI proxy ingress only)
@@ -201,7 +201,7 @@ components:
         trustNotice:
           type: string
           description: |
-            Literal display string per FR1-028:
+            Literal display string:
             "C2PA signer verified against C2PA Trust List as of registration time" or
             "C2PA signer not found on Trust List at registration time"
     DuplicateRegistrationResponse:

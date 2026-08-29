@@ -8,7 +8,7 @@ paths:
       operationId: searchAuditEvents
       summary: Search and filter audit events (read-only)
       description: |
-        Operator audit console (FR10). Filters AND together; omitted parameters are wildcards.
+        Operator audit console. Filters AND together; omitted parameters are wildcards.
         Paginated; max 200 items per page. Requires Auth0 JWT with `audit:read` claim on
         `app.millihash.com` — not a RapidAPI route.
       tags:

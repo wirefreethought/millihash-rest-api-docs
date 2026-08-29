@@ -3,10 +3,8 @@ info:
   title: MilliHash Owner Portfolio API
   version: 1.0.0
   description: |
-    FR3 — View Your Registry (paginated owner listing).
-    FR4 — Download a Proof Certificate (immutable PDF).
-    FR16 — List and view owner Projects with version timeline.
-    Authenticated RapidAPI ingress only. Error envelope from api-platform (002-api-platform).
+    Owner registry listing, certificate download, and owner project list/detail.
+    Authenticated RapidAPI ingress only. Error envelope from api-platform.
 servers:
   - url: https://api.millihash.com
     description: Production API (RapidAPI authenticated ingress)
@@ -15,7 +13,7 @@ paths:
     get:
       operationId: listOwnerProjects
       summary: List projects owned by the authenticated user
-      description: Owner-scoped project list (FR16). Default limit 50, ordered by createdAt descending.
+      description: Owner-scoped project list. Default limit 50, ordered by createdAt descending.
       tags:
         - Owner Portfolio
       security:
@@ -37,7 +35,7 @@ paths:
     get:
       operationId: getOwnerProject
       summary: Get project detail with version timeline
-      description: Owner-scoped project detail (FR16) including ordered version summaries.
+      description: Owner-scoped project detail including ordered version summaries.
       tags:
         - Owner Portfolio
       security:
@@ -81,8 +79,12 @@ paths:
       description: |
         Owner-scoped, cursor-paginated registry dashboard. Fixed page size 50.
         Default sort: `tsaTimestamp` descending, `registrationId` ascending tie-break.
-        Optional sort: `label` ascending (Unicode root collation, case-sensitive) with `registrationId` tie-break.
-        Does not invoke FR6 anchor lookup per row (NFR2).
+        Optional `sort`: `label` (default direction ascending), `bitcoinBlockConfirmationTime`
+        (default direction descending), or `tsaTimestamp`.
+        Optional `direction`: `asc` or `desc` (defaults per sort field).
+        Tie-break is always `registrationId` ascending. Missing on-chain times follow MongoDB null ordering
+        (first on asc, last on desc).
+        Listing does not invoke per-row anchor lookup.
       tags:
         - Owner Portfolio
       security:
@@ -100,8 +102,17 @@ paths:
           description: Primary sort field. Default `tsaTimestamp`.
           schema:
             type: string
-            enum: [tsaTimestamp, label]
+            enum: [tsaTimestamp, label, bitcoinBlockConfirmationTime]
             default: tsaTimestamp
+        - name: direction
+          in: query
+          required: false
+          description: |
+            Sort direction. Defaults: `tsaTimestamp`/`bitcoinBlockConfirmationTime` → `desc`;
+            `label` → `asc`.
+          schema:
+            type: string
+            enum: [asc, desc]
       responses:
         '200':
           description: Owner registry page
@@ -113,7 +124,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RegistryListingResponse'
         '400':
-          description: Invalid cursor
+          description: Invalid cursor or sort/direction
           content:
             application/vnd.millihash.v1+json:
               schema:

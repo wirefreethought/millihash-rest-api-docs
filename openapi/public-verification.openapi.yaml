@@ -3,10 +3,10 @@ info:
   title: MilliHash Public Verification API
   version: 1.0.0
   description: |
-    FR2 — Verify an Asset (POST /verify).
-    FR5 — Verify a Certificate (GET /certificates/{id}/verify).
-    FR6 — Check Anchor Confirmation (GET /anchors/{registrationId}, GET /anchors/{registrationId}/ots).
-    FR15 — Verify a Project Chain (GET /projects/{projectId}/chain/verify).
+    Verify an asset (POST /verify).
+    Verify a certificate (GET /certificates/{id}/verify).
+    Check anchor confirmation (GET /anchors/{registrationId}, GET /anchors/{registrationId}/ots).
+    Verify a project chain (GET /projects/{projectId}/chain/verify).
     Free instance direct ingress only — no RapidAPI authentication.
 servers:
   - url: https://api.millihash.com
@@ -17,7 +17,7 @@ paths:
       operationId: verifyAsset
       summary: Verify an asset by file or text upload
       description: |
-        Server-computed SHA-256 (identical normalization to FR1). Exact hash lookup.
+        Server-computed SHA-256 (identical normalization to registration). Exact hash lookup.
         No authentication. Response identical for anonymous and authenticated callers.
         Does not re-extract C2PA from upload — echoes stored metadata only.
       tags:
@@ -64,7 +64,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
-          description: Rate limited (NFR6)
+          description: Rate limited
           headers:
             Retry-After:
               schema:
@@ -185,7 +185,7 @@ paths:
       operationId: verifyProjectChain
       summary: Verify a project version chain
       description: |
-        Public chain integrity verification (FR15). Validates sequential version numbers and
+        Public chain integrity verification. Validates sequential version numbers and
         contentHash links. No authentication required.
       tags:
         - Public Verification

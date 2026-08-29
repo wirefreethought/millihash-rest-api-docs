@@ -3,8 +3,8 @@ info:
   title: MilliHash Project Lineage API
   version: 1.0.0
   description: |
-    FR13 — Create a Project (genesis version).
-    FR14 — Append a Project Version.
+    Create a project (genesis version).
+    Append a project version.
     Authenticated RapidAPI ingress only (pro instance).
 servers:
   - url: https://api.millihash.com
@@ -16,7 +16,7 @@ paths:
       summary: Create a project with genesis version
       description: |
         Creates a Project and version 1 Registration. Genesis `contentHash` equals `documentHash`.
-        Same multipart/JSON submission modes as FR1. Consumes one plan quota unit.
+        Same multipart/JSON submission modes as registration. Consumes one plan quota unit.
       tags:
         - Project Lineage
       security:
