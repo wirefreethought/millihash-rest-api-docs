@@ -7,6 +7,7 @@ info:
     Verify a certificate (GET /certificates/{id}/verify).
     Check anchor confirmation (GET /anchors/{registrationId}, GET /anchors/{registrationId}/ots).
     Verify a project chain (GET /projects/{projectId}/chain/verify).
+    Public activity stats (GET /stats) and sample proof (GET /sample).
     Free instance direct ingress only — no RapidAPI authentication.
 servers:
   - url: https://api.millihash.com
@@ -213,8 +214,114 @@ paths:
             application/vnd.millihash.v1+json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+  /stats:
+    get:
+      operationId: getPublicStats
+      summary: Get public activity stats
+      description: |
+        Aggregate service activity for display on public pages. `timestampStandard` and
+        `anchoring` are always returned. `latestAnchorConfirmedAt` is returned only when a
+        Bitcoin anchor confirmed recently, and each `usage` field only once it reaches a
+        server-side threshold; omitted fields are absent rather than zero. Never returns
+        hashes, labels, registrant data, or per-registration identifiers. The sample proof
+        is excluded from all counts. Responses are cached for up to 60 seconds.
+      tags:
+        - Public Verification
+      security: []
+      servers:
+        - url: https://api.millihash.com
+          description: Free instance (direct public access)
+      responses:
+        '200':
+          description: Public activity stats
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/PublicStatsResponse'
+        '429':
+          description: Rate limited
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /sample:
+    get:
+      operationId: getSampleProof
+      summary: Get the sample proof
+      description: |
+        Returns a text sample that MilliHash registered itself, so anyone can try
+        verification without their own content. Submit `text` to `POST /verify`
+        (contentType=text) to get a match.
+      tags:
+        - Public Verification
+      security: []
+      servers:
+        - url: https://api.millihash.com
+          description: Free instance (direct public access)
+      responses:
+        '200':
+          description: Sample proof
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/SampleProofResponse'
+        '404':
+          description: Sample proof is not available on this deployment
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Rate limited
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 components:
   schemas:
+    PublicStatsResponse:
+      type: object
+      required: [timestampStandard, anchoring]
+      properties:
+        timestampStandard:
+          type: string
+          const: RFC 3161
+        anchoring:
+          type: string
+          const: bitcoin-opentimestamps
+        latestAnchorConfirmedAt:
+          type: string
+          format: date-time
+          description: Omitted when no Bitcoin anchor has confirmed within the configured anchor window (default 7 days).
+        usage:
+          type: object
+          description: Present only when at least one field meets its threshold; each field is omitted below its threshold.
+          properties:
+            registrations:
+              type: integer
+              format: int64
+            confirmedAnchors:
+              type: integer
+              format: int64
+            lastRegistrationAt:
+              type: string
+              format: date-time
+              description: Omitted when the latest registration is older than the configured recent window (default 24 hours).
+    SampleProofResponse:
+      type: object
+      required: [text, certificateId, registeredAt, anchorState]
+      properties:
+        text:
+          type: string
+          description: Exact registered text; submit unchanged to POST /verify to get a match.
+        certificateId:
+          type: string
+        registeredAt:
+          type: string
+          format: date-time
+        anchorState:
+          type: string
+          enum: [Pending, Stamped, Confirmed, Failed]
     RegistrantSnapshot:
       type: object
       required: [name, email]

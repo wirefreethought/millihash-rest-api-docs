@@ -27,9 +27,9 @@ info:
     backgroundColor: "#FFFFFF"
 
 servers:
-  - url: https://api.millihash.com
+  - url: https://free-api.millihash.dev
     description: Free instance — direct public access
-  - url: https://app.millihash.com
+  - url: https://app.millihash.dev
     description: Operator admin console (Auth0 JWT)
 
 tags:
@@ -40,7 +40,7 @@ tags:
   - name: Owner Portfolio
     description: Owner registry, projects, and certificate download (pro / RapidAPI only)
   - name: Public Verification
-    description: Asset, certificate, and anchor verification (free instance only)
+    description: Asset, certificate, and anchor verification, plus public stats and sample proof (free instance only)
   - name: Admin Audit
     description: Operator audit search (Auth0 JWT on app host — not RapidAPI)
 
@@ -76,6 +76,10 @@ paths:
     $ref: 'openapi/public-verification.openapi.yaml#/paths/~1anchors~1{registrationId}'
   /anchors/{registrationId}/ots:
     $ref: 'openapi/public-verification.openapi.yaml#/paths/~1anchors~1{registrationId}~1ots'
+  /stats:
+    $ref: 'openapi/public-verification.openapi.yaml#/paths/~1stats'
+  /sample:
+    $ref: 'openapi/public-verification.openapi.yaml#/paths/~1sample'
   /admin/audit:
     $ref: 'openapi/audit-operations.openapi.yaml#/paths/~1admin~1audit'
 
@@ -112,5 +116,9 @@ components:
       $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/AnchorStatusResponse'
     VerificationNotFound:
       $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/VerificationNotFound'
+    PublicStatsResponse:
+      $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/PublicStatsResponse'
+    SampleProofResponse:
+      $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/SampleProofResponse'
     AuditSearchResponse:
       $ref: 'openapi/audit-operations.openapi.yaml#/components/schemas/AuditSearchResponse'
