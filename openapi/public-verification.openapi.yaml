@@ -8,10 +8,14 @@ info:
     Check anchor confirmation (GET /anchors/{registrationId}, GET /anchors/{registrationId}/ots).
     Verify a project chain (GET /projects/{projectId}/chain/verify).
     Public activity stats (GET /stats) and sample proof (GET /sample).
-    Free instance direct ingress only — no RapidAPI authentication.
+    Served on both instances: free instance directly with no authentication, and pro instance
+    through the RapidAPI proxy so subscribers can call every operation with one key and host.
+    Responses are identical on both instances.
 servers:
   - url: https://api.millihash.com
     description: Free instance (direct public access)
+  - url: https://api.millihash.com
+    description: Pro instance (RapidAPI proxy ingress only)
 paths:
   /verify:
     post:
@@ -27,6 +31,8 @@ paths:
       servers:
         - url: https://api.millihash.com
           description: Free instance (direct public access)
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       requestBody:
         required: true
         content:
@@ -88,6 +94,8 @@ paths:
       servers:
         - url: https://api.millihash.com
           description: Free instance (direct public access)
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: id
           in: path
@@ -127,6 +135,8 @@ paths:
       servers:
         - url: https://api.millihash.com
           description: Free instance (direct public access)
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: registrationId
           in: path
@@ -163,6 +173,8 @@ paths:
       servers:
         - url: https://api.millihash.com
           description: Free instance (direct public access)
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: registrationId
           in: path
@@ -194,6 +206,8 @@ paths:
       servers:
         - url: https://api.millihash.com
           description: Free instance (direct public access)
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: projectId
           in: path
@@ -231,6 +245,8 @@ paths:
       servers:
         - url: https://api.millihash.com
           description: Free instance (direct public access)
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       responses:
         '200':
           description: Public activity stats
@@ -258,6 +274,8 @@ paths:
       servers:
         - url: https://api.millihash.com
           description: Free instance (direct public access)
+        - url: https://api.millihash.com
+          description: Pro instance (RapidAPI proxy ingress only)
       responses:
         '200':
           description: Sample proof
@@ -488,7 +506,7 @@ components:
       properties:
         state:
           type: string
-          enum: [Pending, Confirmed, Failed]
+          enum: [Pending, Stamped, Confirmed, Failed]
         shareableUrl:
           type: string
           format: uri

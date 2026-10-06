@@ -13,12 +13,13 @@ info:
       public verification routes. RapidAPI-authenticated routes
       (`POST/GET /registrations`, certificate download) are disabled.
     - **Pro instance** — reachable only through the RapidAPI proxy (IP whitelist). Serves
-      RapidAPI-authenticated registration and owner-portfolio routes.
-      Public verification routes are not exposed on this deployment.
+      RapidAPI-authenticated registration, project, and owner-portfolio routes, plus every
+      public verification route, so RapidAPI subscribers can call the whole API with one key.
 
     **Authenticated endpoints** require `X-RapidAPI-Key` (pro instance / RapidAPI ingress only).
 
-    **Public verification endpoints** require no authentication (free instance only).
+    **Public verification endpoints** require no authentication on the free instance and are
+    also available to RapidAPI subscribers on the pro instance, with identical responses.
 
     **Operator admin** (`GET /admin/audit`) is documented below for completeness. It is served on
     `app.millihash.com` with Auth0 JWT — not via RapidAPI or the public `api.millihash.com` marketplace edge.
@@ -40,7 +41,7 @@ tags:
   - name: Owner Portfolio
     description: Owner registry, projects, and certificate download (pro / RapidAPI only)
   - name: Public Verification
-    description: Asset, certificate, and anchor verification, plus public stats and sample proof (free instance only)
+    description: Asset, certificate, and anchor verification, plus public stats and sample proof (free instance, and pro via RapidAPI)
   - name: Admin Audit
     description: Operator audit search (Auth0 JWT on app host — not RapidAPI)
 

@@ -196,7 +196,7 @@ paths:
       summary: Download anchored Certificate PDF
       description: |
         Renders the Layer-1 + Bitcoin Anchor Certificate PDF on demand when AnchorJob is Confirmed.
-        Returns 409 ANCHOR_NOT_CONFIRMED when Pending or Failed. Owner must match stored OwnerKey.
+        Returns 409 ANCHOR_NOT_CONFIRMED when Pending, Stamped, or Failed. Owner must match stored OwnerKey.
       tags:
         - Owner Portfolio
       security:
@@ -252,13 +252,10 @@ paths:
 components:
   securitySchemes:
     RapidApiKey:
-      type: apiKey
-      in: header
-      name: X-RapidAPI-Key
-      description: Validated at RapidAPI gateway; backend trusts injected identity headers
+      $ref: 'common.openapi.yaml#/components/securitySchemes/RapidApiKey'
   schemas:
     ErrorEnvelope:
-      $ref: '../../002-api-platform/contracts/error-envelope.schema.json'
+      $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
     OwnerKey:
       type: object
       required: [identityProvider, userId]
@@ -326,11 +323,16 @@ components:
           example: https://app.millihash.com/anchor/6d0915e7-4f86-4f99-987e-57f8f83e8354
         anchorState:
           type: string
-          enum: [Pending, Confirmed, Failed]
+          enum: [Pending, Stamped, Confirmed, Failed]
         anchoredCertificateUrl:
           type: string
           description: Present only when anchorState is Confirmed
           example: /certificates/6d0915e7-4f86-4f99-987e-57f8f83e8354/anchored
+        bitcoinBlockConfirmationTime:
+          type: string
+          format: date-time
+          description: Informational Bitcoin corroboration when present; TSA timestamp remains authoritative
+          example: 2026-02-01T00:00:00.000Z
         c2pa:
           $ref: '#/components/schemas/C2paListingMetadata'
     C2paListingMetadata:
