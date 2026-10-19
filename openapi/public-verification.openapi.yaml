@@ -25,6 +25,7 @@ paths:
         Server-computed SHA-256 (identical normalization to registration). Exact hash lookup.
         No authentication. Response identical for anonymous and authenticated callers.
         Does not re-extract C2PA from upload — echoes stored metadata only.
+        Binary assets use multipart; text assets use JSON (`contentType=text`).
       tags:
         - Public Verification
       security: []
@@ -38,19 +39,13 @@ paths:
         content:
           multipart/form-data:
             schema:
-              type: object
-              properties:
-                contentType:
-                  type: string
-                  enum: [binary, text]
-                file:
-                  type: string
-                  format: binary
-                  description: Raw bytes when contentType=binary
-                text:
-                  type: string
-                  description: Text input when contentType=text (normalized before hash)
-              required: [contentType]
+              $ref: '#/components/schemas/VerifyBinaryMultipartRequest'
+          application/vnd.millihash.v1+json:
+            schema:
+              $ref: '#/components/schemas/VerifyTextJsonRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyTextJsonRequest'
       responses:
         '200':
           description: Verification hit or explicit not-found
@@ -297,6 +292,27 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
 components:
   schemas:
+    VerifyBinaryMultipartRequest:
+      type: object
+      required: [contentType, file]
+      properties:
+        contentType:
+          type: string
+          enum: [binary]
+        file:
+          type: string
+          format: binary
+          description: Raw bytes to hash and look up
+    VerifyTextJsonRequest:
+      type: object
+      required: [contentType, text]
+      properties:
+        contentType:
+          type: string
+          enum: [text]
+        text:
+          type: string
+          description: Text input (normalized before hash, identical to registration)
     PublicStatsResponse:
       type: object
       required: [timestampStandard, anchoring]
