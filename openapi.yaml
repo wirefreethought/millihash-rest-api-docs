@@ -84,6 +84,8 @@ paths:
     $ref: 'openapi/public-verification.openapi.yaml#/paths/~1stats'
   /sample:
     $ref: 'openapi/public-verification.openapi.yaml#/paths/~1sample'
+  /me/plan:
+    $ref: 'openapi/me-plan.openapi.yaml#/paths/~1me~1plan'
   /admin/audit:
     $ref: 'openapi/audit-operations.openapi.yaml#/paths/~1admin~1audit'
 
@@ -96,6 +98,8 @@ components:
   schemas:
     ErrorEnvelope:
       $ref: 'openapi/common.openapi.yaml#/components/schemas/ErrorEnvelope'
+    MePlan:
+      $ref: 'openapi/me-plan.openapi.yaml#/components/schemas/MePlan'
     ContentDigest:
       $ref: 'openapi/registrations.openapi.yaml#/components/schemas/ContentDigest'
     RegistrationCreatedResponse:

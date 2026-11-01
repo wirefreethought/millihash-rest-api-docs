@@ -1,0 +1,50 @@
+openapi: 3.0.3
+info:
+  title: MilliHash GET /me/plan
+  version: 1.0.0
+paths:
+  /me/plan:
+    get:
+      operationId: getMePlan
+      summary: Current RapidAPI subscription plan and upload ceiling
+      tags:
+        - Plan
+      security:
+        - RapidApiKey: []
+      responses:
+        "200":
+          description: Plan projection for the caller
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/MePlan'
+        "401":
+          description: Missing or invalid RapidAPI gateway identity
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+components:
+  schemas:
+    MePlan:
+      type: object
+      additionalProperties: false
+      required:
+        - plan
+        - maxAssetUploadSize
+        - nextPlan
+      properties:
+        plan:
+          type: string
+          enum: [BASIC, PRO, ULTRA, MEGA]
+        maxAssetUploadSize:
+          type: integer
+          format: int64
+          minimum: 1
+        nextPlan:
+          nullable: true
+          description: Next upgrade tier, or null when MEGA
+          oneOf:
+            - type: string
+              enum: [PRO, ULTRA, MEGA]
+            - type: 'null'
