@@ -79,12 +79,13 @@ paths:
       description: |
         Owner-scoped, cursor-paginated registry dashboard. Fixed page size 50.
         Default sort: `tsaTimestamp` descending, `registrationId` ascending tie-break.
-        Optional `sort`: `label` (default direction ascending), `bitcoinBlockConfirmationTime`
-        (default direction descending), or `tsaTimestamp`.
+        Optional `sort`: `label` (display-name semantics: internalLabel then label; default ascending),
+        `bitcoinBlockConfirmationTime` (default descending), or `tsaTimestamp`.
         Optional `direction`: `asc` or `desc` (defaults per sort field).
         Tie-break is always `registrationId` ascending. Missing on-chain times follow MongoDB null ordering
         (first on asc, last on desc).
         Listing does not invoke per-row anchor lookup.
+        Rows include digests, label, labelPublic, internalLabel, and displayName.
       tags:
         - Owner Portfolio
       security:
@@ -131,6 +132,65 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /registrations/{registrationId}:
+    patch:
+      operationId: patchRegistrationLabels
+      summary: Update owner label metadata
+      description: |
+        Accepts only `labelPublic` and/or `internalLabel`. Immutable `label` and proof digests
+        MUST NOT be accepted. `labelPublic=true` when `label` is empty → HTTP 400.
+        Oversized `internalLabel` → HTTP 400 `INTERNAL_LABEL_TOO_LARGE` (plan `maxInternalLabelLength`).
+      tags:
+        - Owner Portfolio
+      security:
+        - RapidApiKey: []
+      parameters:
+        - name: registrationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/vnd.millihash.v1+json:
+            schema:
+              $ref: '#/components/schemas/RegistrationLabelPatchRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationLabelPatchRequest'
+      responses:
+        '200':
+          description: Updated label metadata
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/RegistrationLabelPatchResponse'
+        '400':
+          description: Invalid patch (empty label with labelPublic=true, unknown fields, or INTERNAL_LABEL_TOO_LARGE)
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Authentication required
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Not registration owner
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Registration not found
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -285,7 +345,10 @@ components:
         - registrationId
         - ownerKey
         - label
+        - labelPublic
+        - displayName
         - hashTruncated
+        - digests
         - submissionMode
         - tsaTimestamp
         - tsaProvider
@@ -301,10 +364,32 @@ components:
         label:
           type: string
           nullable: true
+        labelPublic:
+          type: boolean
+        internalLabel:
+          type: string
+          description: Owner-only private name; never on certificates or public verify
+        displayName:
+          type: string
+          description: internalLabel if non-empty, else label
         hashTruncated:
           type: string
           description: First 8 + ellipsis + last 8 hex characters of SHA-256 hash
           example: d41d8cd9…098f00bc
+        digests:
+          type: array
+          items:
+            type: object
+            required: [role, algorithm, transform, digestHex]
+            properties:
+              role:
+                type: string
+              algorithm:
+                type: string
+              transform:
+                type: string
+              digestHex:
+                type: string
         submissionMode:
           type: string
           enum: [server-computed, client-supplied]
@@ -335,6 +420,29 @@ components:
           example: 2026-02-01T00:00:00.000Z
         c2pa:
           $ref: '#/components/schemas/C2paListingMetadata'
+    RegistrationLabelPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        labelPublic:
+          type: boolean
+        internalLabel:
+          type: string
+          nullable: true
+    RegistrationLabelPatchResponse:
+      type: object
+      required: [registrationId, label, labelPublic]
+      properties:
+        registrationId:
+          type: string
+          format: uuid
+        label:
+          type: string
+        labelPublic:
+          type: boolean
+        internalLabel:
+          type: string
+          nullable: true
     C2paListingMetadata:
       type: object
       required:

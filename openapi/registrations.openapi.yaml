@@ -1,29 +1,33 @@
 openapi: 3.1.0
 info:
   title: MilliHash Registration API
-  version: 1.0.0
+  version: 1.1.0
   description: |
-    Register an asset. Pro instance / RapidAPI ingress only.
+    FR1 — Register an Asset. Authenticated RapidAPI ingress only.
+    Error envelope shape published by api-platform (002-api-platform).
+
+    Multi-digest + labels: create returns typed `digests[]` and label fields.
+    Mutable `labelPublic` / `internalLabel` after create are owned by owner-portfolio
+    via PATCH /registrations/{registrationId} (owner-portfolio OpenAPI) — not FR1 POST.
 servers:
   - url: https://api.millihash.com
-    description: Pro instance (RapidAPI proxy ingress only)
+    description: Production API (RapidAPI authenticated ingress for FR1)
 paths:
   /registrations:
     post:
       operationId: createRegistration
       summary: Register an asset hash with RFC 3161 TSA timestamp
       description: |
-        Synchronous registration pipeline: resolve or accept SHA-256 hash as `documentHash`,
-        stamp `contentHash` (equal at standalone genesis), acquire TSA token on contentHash,
-        enforce global documentHash exclusion, persist Registration, enqueue AnchorJob.
-        Asset bytes are never stored. Client-supplied mode accepts hash hex only (no file upload).
+        Synchronous registration pipeline: resolve typed proof digests (or accept client-supplied
+        hash as client-supplied-v1), compute VersionCommitment (`contentHash`), acquire TSA token
+        over that commitment, enforce global uniqueness per proof digest, persist Registration,
+        enqueue AnchorJob. Asset bytes are never stored. Client-supplied mode accepts hash hex
+        only (no file upload). Optional immutable `label`; optional `labelPublic` (default false);
+        optional `internalLabel` (owner-only).
       tags:
         - Registrations
       security:
         - RapidApiKey: []
-      servers:
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       requestBody:
         required: true
         content:
@@ -63,7 +67,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '409':
-          description: Duplicate hash, chain document claimed, or document already registered
+          description: Duplicate proof digest (sequential or concurrent race)
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -80,6 +84,7 @@ paths:
             application/vnd.millihash.v1+json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+
 components:
   securitySchemes:
     RapidApiKey:
@@ -87,6 +92,26 @@ components:
   schemas:
     ErrorEnvelope:
       $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+    ContentDigest:
+      type: object
+      required: [role, algorithm, transform, digestHex]
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+          enum: [proof, discovery]
+          description: V1 create responses include role=proof only
+        algorithm:
+          type: string
+          enum: [sha256]
+        transform:
+          type: string
+          description: |
+            Versioned transform id — V1 proof producers:
+            bytes-raw-v1 | literal-v1 | text-normalized-v2 | client-supplied-v1
+        digestHex:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
     ServerComputedMultipartRequest:
       type: object
       required:
@@ -98,6 +123,14 @@ components:
         label:
           type: string
           maxLength: 200
+          description: Immutable after create; omit/blank → permanent empty
+        labelPublic:
+          type: boolean
+          default: false
+          description: Forced false when label empty; mutable later via PATCH (FR3)
+        internalLabel:
+          type: string
+          description: Owner-only private name; never on certificates or public APIs
         mediaType:
           type: string
           description: Informational MIME hint
@@ -128,6 +161,11 @@ components:
           type: string
         label:
           type: string
+        labelPublic:
+          type: boolean
+          default: false
+        internalLabel:
+          type: string
     ClientSuppliedJsonRequest:
       type: object
       required:
@@ -144,12 +182,21 @@ components:
           type: string
         label:
           type: string
+        labelPublic:
+          type: boolean
+          default: false
+        internalLabel:
+          type: string
+
     RegistrationCreatedResponse:
       type: object
       required:
         - registrationId
         - hash
+        - digests
         - submissionMode
+        - label
+        - labelPublic
         - tsaTimestamp
         - tsaProvider
         - certificateUrl
@@ -161,9 +208,27 @@ components:
         hash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Designated primary proof digest (compat)
+        digests:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ContentDigest'
+        contentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: VersionCommitment hex (standalone)
         submissionMode:
           type: string
           enum: [server-computed, client-supplied]
+        label:
+          type: string
+        labelPublic:
+          type: boolean
+        internalLabel:
+          type: string
+          nullable: true
+          description: Owner-only; present on authenticated create response
         tsaTimestamp:
           type: string
           format: date-time
@@ -201,7 +266,7 @@ components:
         trustNotice:
           type: string
           description: |
-            Literal display string:
+            Literal display string per FR1-028:
             "C2PA signer verified against C2PA Trust List as of registration time" or
             "C2PA signer not found on Trust List at registration time"
     DuplicateRegistrationResponse:
@@ -218,16 +283,24 @@ components:
       required:
         - registrationId
         - hash
+        - digests
         - submissionMode
         - tsaTimestamp
         - tsaProvider
         - certificateUrl
+      description: |
+        409 existingRegistration. Include `label` only when labelPublic=true and label
+        non-empty. Never include internalLabel.
       properties:
         registrationId:
           type: string
           format: uuid
         hash:
           type: string
+        digests:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentDigest'
         submissionMode:
           type: string
         registrantSnapshot:
@@ -244,3 +317,6 @@ components:
           type: string
         certificateUrl:
           type: string
+        label:
+          type: string
+          description: Present only when labelPublic=true and label non-empty

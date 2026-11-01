@@ -51,6 +51,9 @@ paths:
       $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1registrations/get'
     post:
       $ref: 'openapi/registrations.openapi.yaml#/paths/~1registrations/post'
+  /registrations/{registrationId}:
+    patch:
+      $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1registrations~1{registrationId}/patch'
   /certificates/{certificateId}:
     $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}'
   /certificates/{certificateId}/anchored:
@@ -93,10 +96,16 @@ components:
   schemas:
     ErrorEnvelope:
       $ref: 'openapi/common.openapi.yaml#/components/schemas/ErrorEnvelope'
+    ContentDigest:
+      $ref: 'openapi/registrations.openapi.yaml#/components/schemas/ContentDigest'
     RegistrationCreatedResponse:
       $ref: 'openapi/registrations.openapi.yaml#/components/schemas/RegistrationCreatedResponse'
     DuplicateRegistrationResponse:
       $ref: 'openapi/registrations.openapi.yaml#/components/schemas/DuplicateRegistrationResponse'
+    RegistrationLabelPatchRequest:
+      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/RegistrationLabelPatchRequest'
+    RegistrationLabelPatchResponse:
+      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/RegistrationLabelPatchResponse'
     ProjectCreatedResponse:
       $ref: 'openapi/project-lineage.openapi.yaml#/components/schemas/ProjectCreatedResponse'
     VersionAppendedResponse:

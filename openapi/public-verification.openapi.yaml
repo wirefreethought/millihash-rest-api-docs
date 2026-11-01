@@ -395,6 +395,7 @@ components:
       type: object
       required:
         - hash
+        - digests
         - hitType
         - registrantSnapshot
         - tsaTimestamp
@@ -406,6 +407,29 @@ components:
           type: string
           pattern: '^[0-9a-f]{64}$'
           description: documentHash of the matched registration
+        digests:
+          type: array
+          items:
+            type: object
+            required: [role, algorithm, transform, digestHex]
+            properties:
+              role:
+                type: string
+              algorithm:
+                type: string
+              transform:
+                type: string
+              digestHex:
+                type: string
+        matchedAlgorithm:
+          type: string
+          description: Algorithm of the proof digest that matched the verify input
+        matchedTransform:
+          type: string
+          description: Transform of the proof digest that matched the verify input
+        label:
+          type: string
+          description: Present only when labelPublic=true and label non-empty; never internalLabel
         hitType:
           type: string
           enum: [standalone, chain_version]
@@ -446,6 +470,7 @@ components:
       required:
         - certificateId
         - hash
+        - digests
         - registrantSnapshot
         - tsaTimestamp
         - tsaProvider
@@ -459,6 +484,23 @@ components:
           format: uuid
         hash:
           type: string
+        digests:
+          type: array
+          items:
+            type: object
+            required: [role, algorithm, transform, digestHex]
+            properties:
+              role:
+                type: string
+              algorithm:
+                type: string
+              transform:
+                type: string
+              digestHex:
+                type: string
+        label:
+          type: string
+          description: Present only when labelPublic=true and label non-empty; never internalLabel
         registrantSnapshot:
           $ref: '#/components/schemas/RegistrantSnapshot'
         tsaTimestamp:
