@@ -156,9 +156,12 @@ paths:
       operationId: patchRegistrationLabels
       summary: Update owner label metadata
       description: |
-        Accepts only `labelPublic` and/or `internalLabel`. Immutable `label` and proof digests
-        MUST NOT be accepted. `labelPublic=true` when `label` is empty → HTTP 400.
-        Oversized `internalLabel` → HTTP 400 `INTERNAL_LABEL_TOO_LARGE` (plan `maxInternalLabelLength`).
+        Accepts any subset of `labelPublic`, `internalLabel`, and `discoverability` (`hidden` |
+        `label_visible`). Immutable `label` and proof digests MUST NOT be accepted.
+        `labelPublic=true` when `label` is empty → HTTP 400.
+        `discoverability` on a Registration not opted into FR21 similarity → HTTP 400
+        `SIMILARITY_NOT_OPTED_IN`. Oversized `internalLabel` → HTTP 400
+        `INTERNAL_LABEL_TOO_LARGE` (plan `maxInternalLabelLength`).
       tags:
         - Owner Portfolio
       security:
@@ -187,7 +190,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RegistrationLabelPatchResponse'
         '400':
-          description: Invalid patch (empty label with labelPublic=true, unknown fields, or INTERNAL_LABEL_TOO_LARGE)
+          description: Invalid patch (empty label with labelPublic=true, unknown fields, SIMILARITY_NOT_OPTED_IN, or INTERNAL_LABEL_TOO_LARGE)
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -446,6 +449,16 @@ components:
           format: uuid
           description: Present when Registration is a project chain version
           nullable: true
+        discoverability:
+          type: string
+          enum: [hidden, label_visible]
+          description: FR21 — present only when Registration is opted into similarity
+          nullable: true
+        similarityIndexStatus:
+          type: string
+          enum: [pending, indexed, failed]
+          description: FR21 — present only when Registration is opted into similarity
+          nullable: true
         c2pa:
           $ref: '#/components/schemas/C2paListingMetadata'
     RegistrationLabelPatchRequest:
@@ -457,6 +470,10 @@ components:
         internalLabel:
           type: string
           nullable: true
+        discoverability:
+          type: string
+          enum: [hidden, label_visible]
+          description: FR21 — only valid on opted-in Registrations; otherwise SIMILARITY_NOT_OPTED_IN
     RegistrationLabelPatchResponse:
       type: object
       required: [registrationId, label, labelPublic]
@@ -470,6 +487,11 @@ components:
           type: boolean
         internalLabel:
           type: string
+          nullable: true
+        discoverability:
+          type: string
+          enum: [hidden, label_visible]
+          description: Echoed when Registration is FR21-opted; omitted otherwise
           nullable: true
     C2paListingMetadata:
       type: object
