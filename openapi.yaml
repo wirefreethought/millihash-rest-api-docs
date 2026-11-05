@@ -9,10 +9,12 @@ info:
 
     MilliHash runs as **two deployments** against the same database:
 
-    - **Free instance** — directly reachable at `api.millihash.com`. Serves unauthenticated
-      public verification routes. RapidAPI-authenticated routes
-      (`POST/GET /registrations`, certificate download) are disabled.
-    - **Pro instance** — reachable only through the RapidAPI proxy (IP whitelist). Serves
+    - **Free instance** — production public edge `https://free-api.millihash.io` (first-party SPA
+      Free mode). Logical third-party direct host `api.millihash.com` also serves unauthenticated
+      public verification. RapidAPI-authenticated routes
+      (`POST/GET /registrations`, certificate download) are disabled on the free deployment.
+    - **Pro instance** — reachable only through the RapidAPI proxy
+      (`https://millihash.p.rapidapi.com`, `X-RapidAPI-Host: millihash.p.rapidapi.com`). Serves
       RapidAPI-authenticated registration, project, and owner-portfolio routes, plus every
       public verification route, so RapidAPI subscribers can call the whole API with one key.
 
@@ -22,15 +24,19 @@ info:
     also available to RapidAPI subscribers on the pro instance, with identical responses.
 
     **Operator admin** (`GET /admin/audit`) is documented below for completeness. It is served on
-    `app.millihash.com` with Auth0 JWT — not via RapidAPI or the public `api.millihash.com` marketplace edge.
+    `app.millihash.com` with Auth0 JWT — not via RapidAPI or the public free/direct API edge.
   x-logo:
     url: logo.png
     backgroundColor: "#FFFFFF"
 
 servers:
-  - url: https://free-api.millihash.dev
-    description: Free instance — direct public access
-  - url: https://app.millihash.dev
+  - url: https://free-api.millihash.io
+    description: Free/public production (first-party SPA Free mode)
+  - url: https://millihash.p.rapidapi.com
+    description: Subscription / RapidAPI authenticated ingress
+  - url: https://api.millihash.com
+    description: Logical third-party direct public edge
+  - url: https://app.millihash.com
     description: Operator admin console (Auth0 JWT)
 
 tags:

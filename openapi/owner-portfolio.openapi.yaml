@@ -13,11 +13,20 @@ paths:
     get:
       operationId: listOwnerProjects
       summary: List projects owned by the authenticated user
-      description: Owner-scoped project list. Default limit 50, ordered by createdAt descending.
+      description: |
+        Owner-scoped project list. Page size 50, ordered by createdAt DESC then projectId ASC.
+        Opaque HMAC-signed cursor pagination via `cursor` / `nextPageCursor` (same pattern as registry).
       tags:
         - Owner Portfolio
       security:
         - RapidApiKey: []
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque signed pagination cursor from prior `nextPageCursor`. Omit for first page.
+          schema:
+            type: string
       responses:
         '200':
           description: Project list page
@@ -25,6 +34,12 @@ paths:
             application/vnd.millihash.v1+json:
               schema:
                 $ref: '#/components/schemas/ProjectListPage'
+        '400':
+          description: Invalid cursor
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           description: Authentication required
           content:
@@ -418,6 +433,19 @@ components:
           format: date-time
           description: Informational Bitcoin corroboration when present; TSA timestamp remains authoritative
           example: 2026-02-01T00:00:00.000Z
+        fingerprintSetVersion:
+          type: string
+          description: Entitled discovery attempt-set version when producers ran
+          nullable: true
+        outdatedFingerprint:
+          type: boolean
+          description: Present true when newer producers apply (FR20); omit when false
+          enum: [true]
+        projectId:
+          type: string
+          format: uuid
+          description: Present when Registration is a project chain version
+          nullable: true
         c2pa:
           $ref: '#/components/schemas/C2paListingMetadata'
     RegistrationLabelPatchRequest:
@@ -473,8 +501,13 @@ components:
       properties:
         items:
           type: array
+          maxItems: 50
           items:
             $ref: '#/components/schemas/ProjectSummary'
+        nextPageCursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for next page; null when no further pages.
     ProjectSummary:
       type: object
       required:
