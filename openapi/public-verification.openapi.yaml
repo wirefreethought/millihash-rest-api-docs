@@ -391,6 +391,20 @@ components:
       oneOf:
         - $ref: '#/components/schemas/AssetVerificationHit'
         - $ref: '#/components/schemas/VerificationNotFound'
+    LaterMatchSummary:
+      type: object
+      required: [registrationId, tsaTimestamp]
+      description: |
+        Later multi-match row (not the earliest lead). No registrant PII and no certificateId in V1.
+      properties:
+        registrationId:
+          type: string
+        tsaTimestamp:
+          type: string
+          description: UTC ISO-8601 with millisecond precision
+        label:
+          type: string
+          description: Present only when labelPublic=true and label non-empty
     AssetVerificationHit:
       type: object
       required:
@@ -402,11 +416,12 @@ components:
         - tsaProvider
         - submissionMode
         - certificateVerificationUrl
+        - semanticsNotice
       properties:
         hash:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: documentHash of the matched registration
+          description: documentHash of the matched (lead) registration
         digests:
           type: array
           items:
@@ -427,6 +442,13 @@ components:
         matchedTransform:
           type: string
           description: Transform of the proof digest that matched the verify input
+        matchedClass:
+          type: string
+          const: proof
+          description: Proof-class match only on this endpoint
+        registrantRole:
+          type: string
+          description: Lead Registration registrantRole
         label:
           type: string
           description: Present only when labelPublic=true and label non-empty; never internalLabel
@@ -456,9 +478,21 @@ components:
         submissionModeNotice:
           type: string
           description: Present only when submissionMode=client-supplied
+        semanticsNotice:
+          type: string
+          description: Fixed existence-only semantics notice (same literal as FR5)
         certificateVerificationUrl:
           type: string
           format: uri
+        additionalMatchCount:
+          type: integer
+          minimum: 0
+          description: Count of later Registrations sharing the proof digest; omit or 0 when sole match
+        additionalMatches:
+          type: array
+          items:
+            $ref: '#/components/schemas/LaterMatchSummary'
+          description: Present when additionalMatchCount > 0; plain-text summaries only
         c2pa:
           $ref: '#/components/schemas/C2paMetadata'
     CertificateVerificationResponse:
@@ -501,6 +535,16 @@ components:
         label:
           type: string
           description: Present only when labelPublic=true and label non-empty; never internalLabel
+        registrantRole:
+          type: string
+        matchedAlgorithm:
+          type: string
+          description: Present when lookup was by digest match (hash path)
+        matchedTransform:
+          type: string
+        matchedClass:
+          type: string
+          const: proof
         registrantSnapshot:
           $ref: '#/components/schemas/RegistrantSnapshot'
         tsaTimestamp:
@@ -515,6 +559,7 @@ components:
         shareableUrl:
           type: string
           format: uri
+          description: Always cert-id-keyed for the lead Registration
         tsaValidation:
           $ref: '#/components/schemas/TsaValidationOutcome'
         ltvChain:
@@ -525,6 +570,15 @@ components:
           $ref: '#/components/schemas/C2paMetadata'
         semanticsNotice:
           type: string
+        additionalMatchCount:
+          type: integer
+          minimum: 0
+          description: Hash path only — count of later proof-digest matches; omit on Certificate ID path
+        additionalMatches:
+          type: array
+          items:
+            $ref: '#/components/schemas/LaterMatchSummary'
+          description: Hash path only when additionalMatchCount > 0
     TsaValidationOutcome:
       type: object
       required:
