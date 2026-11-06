@@ -15,8 +15,9 @@ info:
       (`POST/GET /registrations`, certificate download) are disabled on the free deployment.
     - **Pro instance** — reachable only through the RapidAPI proxy
       (`https://millihash.p.rapidapi.com`, `X-RapidAPI-Host: millihash.p.rapidapi.com`). Serves
-      RapidAPI-authenticated registration, project, and owner-portfolio routes, plus every
-      public verification route, so RapidAPI subscribers can call the whole API with one key.
+      RapidAPI-authenticated registration, project, owner-portfolio, and FR21 similarity
+      (overlap / watches / alerts) routes, plus every public verification and similarity
+      search/sample route, so RapidAPI subscribers can call the whole API with one key.
 
     **Authenticated endpoints** require `X-RapidAPI-Key` (pro instance / RapidAPI ingress only).
 
@@ -50,6 +51,10 @@ tags:
     description: Asset, certificate, and anchor verification, plus public stats and sample proof (free instance, and pro via RapidAPI)
   - name: Admin Audit
     description: Operator audit search (Auth0 JWT on app host — not RapidAPI)
+  - name: similarity
+    description: Opt-in semantic text similarity search and samples (FR21; free + RapidAPI)
+  - name: similarity-watches
+    description: Similarity watches and in-app alerts (FR21; RapidAPI / pro only)
 
 paths:
   /registrations:
@@ -94,6 +99,20 @@ paths:
     $ref: 'openapi/me-plan.openapi.yaml#/paths/~1me~1plan'
   /admin/audit:
     $ref: 'openapi/audit-operations.openapi.yaml#/paths/~1admin~1audit'
+  /similarity/searches:
+    $ref: 'openapi/similarity-search.openapi.yaml#/paths/~1similarity~1searches'
+  /samples/similarity:
+    $ref: 'openapi/similarity-search.openapi.yaml#/paths/~1samples~1similarity'
+  /registrations/{registrationId}/similarity-overlap:
+    $ref: 'openapi/similarity-search.openapi.yaml#/paths/~1registrations~1{registrationId}~1similarity-overlap'
+  /similarity/watches:
+    $ref: 'openapi/similarity-search.openapi.yaml#/paths/~1similarity~1watches'
+  /similarity/watches/{watchId}:
+    $ref: 'openapi/similarity-search.openapi.yaml#/paths/~1similarity~1watches~1{watchId}'
+  /similarity/alerts:
+    $ref: 'openapi/similarity-search.openapi.yaml#/paths/~1similarity~1alerts'
+  /similarity/alerts/{alertId}:
+    $ref: 'openapi/similarity-search.openapi.yaml#/paths/~1similarity~1alerts~1{alertId}'
 
 components:
   securitySchemes:
@@ -142,3 +161,19 @@ components:
       $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/SampleProofResponse'
     AuditSearchResponse:
       $ref: 'openapi/audit-operations.openapi.yaml#/components/schemas/AuditSearchResponse'
+    SimilaritySearchRequest:
+      $ref: 'openapi/similarity-search.openapi.yaml#/components/schemas/SimilaritySearchRequest'
+    SimilaritySearchResponse:
+      $ref: 'openapi/similarity-search.openapi.yaml#/components/schemas/SimilaritySearchResponse'
+    SimilarityResultRow:
+      $ref: 'openapi/similarity-search.openapi.yaml#/components/schemas/SimilarityResultRow'
+    SimilaritySamplesResponse:
+      $ref: 'openapi/similarity-search.openapi.yaml#/components/schemas/SimilaritySamplesResponse'
+    SimilarityOverlapResponse:
+      $ref: 'openapi/similarity-search.openapi.yaml#/components/schemas/SimilarityOverlapResponse'
+    SimilarityWatch:
+      $ref: 'openapi/similarity-search.openapi.yaml#/components/schemas/SimilarityWatch'
+    SimilarityAlert:
+      $ref: 'openapi/similarity-search.openapi.yaml#/components/schemas/SimilarityAlert'
+    SimilarityAlertsPage:
+      $ref: 'openapi/similarity-search.openapi.yaml#/components/schemas/SimilarityAlertsPage'

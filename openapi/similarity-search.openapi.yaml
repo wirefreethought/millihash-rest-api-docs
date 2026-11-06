@@ -1,0 +1,245 @@
+openapi: 3.1.0
+info:
+  title: MilliHash Similarity Search (FR21)
+  version: 1.0.0
+  description: |
+    Opt-in semantic text similarity over MilliHash registrations only. Candidates are never proof —
+    confirm with deterministic hash verification (FR2). Responses never include passage text, content,
+    registrant name/email, or any contact/relay field.
+    Versioning via vendor MIME `application/vnd.millihash.v1+json` (default when omitted).
+servers:
+  - url: https://free-api.millihash.io
+    description: Direct public ingress (anonymous)
+  - url: https://millihash.p.rapidapi.com
+    description: RapidAPI ingress (authenticated)
+tags:
+  - name: similarity
+  - name: similarity-watches
+paths:
+  /similarity/searches:
+    post:
+      tags: [similarity]
+      operationId: searchSimilarity
+      summary: Document-level similarity search (both ingresses)
+      description: |
+        Anonymous callers use BASIC limits. With a RapidAPI identity, the caller's own records appear as rows.
+        Other registrants' `hidden` matches count only toward `privateMatchCount` (idea mode) and are dropped in
+        wording mode. Size is checked against plan `maxSimilarityQuerySize` before any inference.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimilaritySearchRequest' }
+            example: { query: "An essay about tidal energy along rocky coasts.", mode: idea, includeSamples: false }
+      responses:
+        '200':
+          description: Search completed (results may be empty)
+          content:
+            application/vnd.millihash.v1+json:
+              schema: { $ref: '#/components/schemas/SimilaritySearchResponse' }
+        '400': { $ref: '#/components/responses/Error', description: 'QUERY_EMPTY | INVALID_SEARCH_MODE | INVALID_LIMIT' }
+        '413': { $ref: '#/components/responses/Error', description: 'QUERY_TOO_LARGE (names limit and next plan)' }
+        '429': { $ref: '#/components/responses/Error', description: 'RATE_LIMITED (direct ingress)' }
+        '503': { $ref: '#/components/responses/Error', description: 'SIMILARITY_UNAVAILABLE (embedding provider); Retry-After set' }
+  /samples/similarity:
+    get:
+      tags: [similarity]
+      operationId: listSimilaritySamples
+      summary: Built-in MilliHash-authored similarity samples (both ingresses)
+      responses:
+        '200':
+          description: 5–10 samples with paraphrase / weak / unrelated query triples
+          content:
+            application/vnd.millihash.v1+json:
+              schema: { $ref: '#/components/schemas/SimilaritySamplesResponse' }
+  /registrations/{registrationId}/similarity-overlap:
+    get:
+      tags: [similarity]
+      operationId: getSimilarityOverlap
+      summary: Post-201 overlap note for an owned opted-in registration (RapidAPI)
+      parameters:
+        - { name: registrationId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Overlap lookup; `pending` returns no results; earlier candidates only
+          content:
+            application/vnd.millihash.v1+json:
+              schema: { $ref: '#/components/schemas/SimilarityOverlapResponse' }
+        '400': { $ref: '#/components/responses/Error', description: SIMILARITY_NOT_OPTED_IN }
+        '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
+        '404': { $ref: '#/components/responses/Error', description: REGISTRATION_NOT_FOUND }
+  /similarity/watches:
+    get:
+      tags: [similarity-watches]
+      operationId: listSimilarityWatches
+      responses:
+        '200':
+          description: Caller's watches
+          content:
+            application/vnd.millihash.v1+json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/SimilarityWatch' } }
+        '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
+    post:
+      tags: [similarity-watches]
+      operationId: createSimilarityWatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [registrationId]
+              properties:
+                registrationId: { type: string }
+      responses:
+        '201':
+          description: Watch created (emits async `similarity.watch_change`)
+          content:
+            application/vnd.millihash.v1+json:
+              schema: { $ref: '#/components/schemas/SimilarityWatch' }
+        '400': { $ref: '#/components/responses/Error', description: SIMILARITY_NOT_OPTED_IN }
+        '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
+        '404': { $ref: '#/components/responses/Error', description: REGISTRATION_NOT_FOUND }
+        '409': { $ref: '#/components/responses/Error', description: 'WATCH_ALREADY_EXISTS | WATCH_LIMIT_EXCEEDED' }
+  /similarity/watches/{watchId}:
+    delete:
+      tags: [similarity-watches]
+      operationId: deleteSimilarityWatch
+      parameters:
+        - { name: watchId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Deleted (emits async `similarity.watch_change`) }
+        '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
+        '404': { $ref: '#/components/responses/Error', description: WATCH_NOT_FOUND }
+  /similarity/alerts:
+    get:
+      tags: [similarity-watches]
+      operationId: listSimilarityAlerts
+      parameters:
+        - { name: cursor, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: Stored in-app alerts (no email/push/webhook), newest first, page size 50
+          content:
+            application/vnd.millihash.v1+json:
+              schema: { $ref: '#/components/schemas/SimilarityAlertsPage' }
+        '400': { $ref: '#/components/responses/Error', description: INVALID_CURSOR }
+        '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
+  /similarity/alerts/{alertId}:
+    patch:
+      tags: [similarity-watches]
+      operationId: markSimilarityAlertRead
+      parameters:
+        - { name: alertId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [read]
+              properties:
+                read: { type: boolean, const: true }
+      responses:
+        '200':
+          description: Updated alert
+          content:
+            application/vnd.millihash.v1+json:
+              schema: { $ref: '#/components/schemas/SimilarityAlert' }
+        '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
+        '404': { $ref: '#/components/responses/Error', description: ALERT_NOT_FOUND }
+components:
+  responses:
+    Error:
+      description: Uniform WFT error envelope (see 002-api-platform error-envelope.schema.json)
+      content:
+        application/vnd.millihash.v1+json:
+          schema: { $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope' }
+  schemas:
+    SimilaritySearchRequest:
+      type: object
+      required: [query]
+      additionalProperties: false
+      properties:
+        query: { type: string, description: 'UTF-8 text; blank → QUERY_EMPTY; size ≤ plan maxSimilarityQuerySize' }
+        mode: { type: string, enum: [idea, wording], default: idea }
+        includeSamples: { type: boolean, default: false }
+        limit: { type: integer, minimum: 1, maximum: 50, default: 20 }
+    SimilarityResultRow:
+      type: object
+      required: [registrationId, recordedAt, coarseScore, matchedPassageShare, candidateOnly]
+      additionalProperties: false
+      properties:
+        registrationId: { type: string }
+        recordedAt: { type: string, format: date-time, description: TSA timestamp (ISO-8601 ms UTC) }
+        coarseScore: { type: number, minimum: 0, maximum: 1, multipleOf: 0.1 }
+        matchedPassageShare: { type: number, minimum: 0, maximum: 1 }
+        candidateOnly: { type: boolean, const: true }
+        label: { type: string, description: 'Only for label_visible rows with non-empty label, or own rows' }
+        isSample: { type: boolean }
+        isOwn: { type: boolean }
+    SimilaritySearchResponse:
+      type: object
+      required: [results, privateMatchCount, comparedAgainstCount, message, modelVersion]
+      additionalProperties: false
+      properties:
+        results: { type: array, items: { $ref: '#/components/schemas/SimilarityResultRow' } }
+        privateMatchCount: { type: integer, minimum: 0 }
+        comparedAgainstCount: { type: integer, minimum: 0 }
+        message: { type: string, example: 'Compared against 42 opted-in registrations on MilliHash.' }
+        modelVersion: { type: string }
+    SimilarityOverlapResponse:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [pending, indexed, failed] }
+        results: { type: array, items: { $ref: '#/components/schemas/SimilarityResultRow' } }
+        privateMatchCount: { type: integer, minimum: 0 }
+    SimilaritySample:
+      type: object
+      required: [id, label, text, paraphrase, weak, unrelated]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        text: { type: string }
+        paraphrase: { type: string }
+        weak: { type: string }
+        unrelated: { type: string }
+    SimilaritySamplesResponse:
+      type: object
+      required: [samples]
+      properties:
+        samples: { type: array, minItems: 5, maxItems: 10, items: { $ref: '#/components/schemas/SimilaritySample' } }
+    SimilarityWatch:
+      type: object
+      required: [watchId, registrationId, createdAt]
+      properties:
+        watchId: { type: string }
+        registrationId: { type: string }
+        createdAt: { type: string, format: date-time }
+    SimilarityAlert:
+      type: object
+      required: [alertId, watchedRegistrationId, createdAt, read, candidateOnly, privateCandidate]
+      additionalProperties: false
+      properties:
+        alertId: { type: string }
+        watchedRegistrationId: { type: string }
+        createdAt: { type: string, format: date-time }
+        read: { type: boolean }
+        candidateOnly: { type: boolean, const: true }
+        privateCandidate: { type: boolean }
+        candidateRegistrationId: { type: string, description: 'Absent when privateCandidate=true' }
+        coarseScore: { type: number, description: 'Absent when privateCandidate=true' }
+        candidateRecordedAt: { type: string, format: date-time, description: 'Absent when privateCandidate=true' }
+    SimilarityAlertsPage:
+      type: object
+      required: [items, unreadCount]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/SimilarityAlert' } }
+        unreadCount: { type: integer, minimum: 0 }
+        nextPageCursor: { type: string }
