@@ -190,7 +190,7 @@ components:
       description: Validated at RapidAPI gateway; backend trusts injected identity headers
   schemas:
     ErrorEnvelope:
-      $ref: '../002-api-platform/contracts/error-envelope.schema.json'
+      $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
     ContentDigest:
       type: object
       required: [role, algorithm, transform, digestHex]
@@ -257,6 +257,16 @@ components:
           type: string
           format: binary
           description: Raw bytes for binary server-computed mode
+        similarityOptIn:
+          type: boolean
+          default: false
+          description: |
+            FR21: opt into similarity indexing. Text-only; binary or client-supplied with true → 400 SIMILARITY_TEXT_ONLY.
+        discoverability:
+          type: string
+          enum: [hidden, label_visible]
+          default: hidden
+          description: "FR21: how the registration appears in similarity results when opted in"
     ServerComputedJsonRequest:
       type: object
       required:
@@ -285,6 +295,15 @@ components:
           default: false
         internalLabel:
           type: string
+        similarityOptIn:
+          type: boolean
+          default: false
+          description: |
+            FR21: opt into similarity indexing (text JSON only). Binary/client-supplied → 400 SIMILARITY_TEXT_ONLY.
+        discoverability:
+          type: string
+          enum: [hidden, label_visible]
+          default: hidden
     ClientSuppliedJsonRequest:
       type: object
       required:
@@ -327,6 +346,7 @@ components:
         - tsaTimestamp
         - tsaProvider
         - certificateUrl
+        - keepOriginalsNotice
       additionalProperties: false
       properties:
         registrationId:
@@ -366,6 +386,14 @@ components:
           type: string
           nullable: true
           description: Owner-only; present on authenticated create response
+        discoverability:
+          type: string
+          enum: [hidden, label_visible]
+          description: "FR21: present when opted into similarity"
+        similarityIndexStatus:
+          type: string
+          enum: [pending, indexed, failed]
+          description: "FR21: `pending` on opt-in 201; omitted when not opted in"
         tsaTimestamp:
           type: string
           format: date-time
@@ -375,6 +403,12 @@ components:
         certificateUrl:
           type: string
           format: uri-reference
+        keepOriginalsNotice:
+          type: string
+          minLength: 1
+          description: |
+            FR1-017 / FR20-008. Required non-empty keep-originals reminder (same contract as
+            FingerprintRefreshCreatedResponse.keepOriginalsNotice).
         c2pa:
           $ref: '#/components/schemas/C2paMetadata'
         priorRegistrationNotice:
@@ -491,6 +525,16 @@ components:
         mediaType:
           type: string
           description: Optional media type override; defaults to the registration's media type
+        similarityOptIn:
+          type: boolean
+          default: false
+          description: |
+            FR21: opt an existing text Registration into similarity (pure-text only).
+            Binary with true → 400 SIMILARITY_TEXT_ONLY. Proof mismatch → 409 with no enqueue.
+        discoverability:
+          type: string
+          enum: [hidden, label_visible]
+          default: hidden
     FingerprintRefreshCreatedResponse:
       type: object
       required:
@@ -525,8 +569,8 @@ components:
           description: Stored proof digest hex that overlapped the upload
         digests:
           type: array
-          minItems: 1
-          description: New `role=discovery` digests only
+          minItems: 0
+          description: New `role=discovery` digests only (empty for pure-text catalog tip)
           items:
             $ref: '#/components/schemas/ContentDigest'
         fingerprintSetVersion:
@@ -548,6 +592,14 @@ components:
         keepOriginalsNotice:
           type: string
           description: FR20-008 reminder to keep original files
+        discoverability:
+          type: string
+          enum: [hidden, label_visible]
+          description: "FR21: echoed from the parent when opted into similarity"
+        similarityIndexStatus:
+          type: string
+          enum: [pending, indexed, failed]
+          description: "FR21: pending on opt-in / failed retry"
     FingerprintLineage:
       type: object
       description: |
