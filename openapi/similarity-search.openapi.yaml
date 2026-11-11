@@ -20,12 +20,16 @@ paths:
     post:
       tags: [similarity]
       operationId: searchSimilarity
-      summary: Document-level similarity search (both ingresses)
+      security:
+        - RapidApiKey: []
+      summary: Document-level similarity search (RapidAPI authenticated)
       description: |
-        Anonymous callers use BASIC limits. With a RapidAPI identity, the caller's own records appear as rows.
+        Requires RapidAPI identity (HTTP 401 without). The caller's own records appear as rows.
         Other registrants' `hidden` matches count only toward `privateMatchCount` (idea mode) and are dropped in
-        wording mode. Size is checked against plan `maxSimilarityQuerySize` before any inference.
-        Results are paged (default `limit` 10, max 50); pass `cursor` from a prior `nextPageCursor` for the next page.
+        wording mode. Query text is normalized (`text-normalized-v2`) before size check, cache lookup, and inference.
+        Process-local LRU may satisfy repeat searches without embed/DB. Size uses plan `maxSimilarityQuerySize`
+        on normalized UTF-8 bytes. Results are paged (default `limit` 10, max 50); pass `cursor` from a prior
+        `nextPageCursor` for the next page.
       requestBody:
         required: true
         content:
@@ -39,20 +43,24 @@ paths:
             application/vnd.millihash.v1+json:
               schema: { $ref: '#/components/schemas/SimilaritySearchResponse' }
         '400': { $ref: '#/components/responses/Error', description: 'QUERY_EMPTY | INVALID_SEARCH_MODE | INVALID_LIMIT (incl. minCosine) | INVALID_CURSOR' }
+        '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
         '413': { $ref: '#/components/responses/Error', description: 'QUERY_TOO_LARGE (names limit and next plan)' }
-        '429': { $ref: '#/components/responses/Error', description: 'RATE_LIMITED (direct ingress)' }
+        '429': { $ref: '#/components/responses/Error', description: 'RATE_LIMITED' }
         '503': { $ref: '#/components/responses/Error', description: 'SIMILARITY_UNAVAILABLE (embedding provider); Retry-After set' }
   /samples/similarity:
     get:
       tags: [similarity]
       operationId: listSimilaritySamples
-      summary: Built-in MilliHash-authored similarity samples (both ingresses)
+      security:
+        - RapidApiKey: []
+      summary: Built-in MilliHash-authored similarity samples (RapidAPI authenticated)
       responses:
         '200':
           description: 5–10 samples with paraphrase / weak / unrelated query triples
           content:
             application/vnd.millihash.v1+json:
               schema: { $ref: '#/components/schemas/SimilaritySamplesResponse' }
+        '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
   /registrations/{registrationId}/similarity-overlap:
     get:
       tags: [similarity]
@@ -154,9 +162,15 @@ paths:
         '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
         '404': { $ref: '#/components/responses/Error', description: ALERT_NOT_FOUND }
 components:
+  securitySchemes:
+    RapidApiKey:
+      type: apiKey
+      in: header
+      name: X-RapidAPI-Key
+      description: Validated at RapidAPI gateway; backend trusts injected identity headers
   responses:
     Error:
-      description: Uniform WFT error envelope (see 002-api-platform error-envelope.schema.json)
+      description: Uniform WFT error envelope
       content:
         application/vnd.millihash.v1+json:
           schema: { $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope' }

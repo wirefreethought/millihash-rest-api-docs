@@ -52,7 +52,7 @@ tags:
   - name: Admin Audit
     description: Operator audit search (Auth0 JWT on app host — not RapidAPI)
   - name: similarity
-    description: Opt-in semantic text similarity search and samples (FR21; free + RapidAPI)
+    description: Opt-in semantic text similarity search and samples (FR21; RapidAPI / pro only)
   - name: similarity-watches
     description: Similarity watches and in-app alerts (FR21; RapidAPI / pro only)
 
