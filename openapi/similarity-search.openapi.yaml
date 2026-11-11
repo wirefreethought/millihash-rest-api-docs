@@ -25,19 +25,20 @@ paths:
         Anonymous callers use BASIC limits. With a RapidAPI identity, the caller's own records appear as rows.
         Other registrants' `hidden` matches count only toward `privateMatchCount` (idea mode) and are dropped in
         wording mode. Size is checked against plan `maxSimilarityQuerySize` before any inference.
+        Results are paged (default `limit` 10, max 50); pass `cursor` from a prior `nextPageCursor` for the next page.
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/SimilaritySearchRequest' }
-            example: { query: "An essay about tidal energy along rocky coasts.", mode: idea, includeSamples: false }
+            example: { query: "An essay about tidal energy along rocky coasts.", mode: idea, includeSamples: false, limit: 10 }
       responses:
         '200':
           description: Search completed (results may be empty)
           content:
             application/vnd.millihash.v1+json:
               schema: { $ref: '#/components/schemas/SimilaritySearchResponse' }
-        '400': { $ref: '#/components/responses/Error', description: 'QUERY_EMPTY | INVALID_SEARCH_MODE | INVALID_LIMIT' }
+        '400': { $ref: '#/components/responses/Error', description: 'QUERY_EMPTY | INVALID_SEARCH_MODE | INVALID_LIMIT (incl. minCosine) | INVALID_CURSOR' }
         '413': { $ref: '#/components/responses/Error', description: 'QUERY_TOO_LARGE (names limit and next plan)' }
         '429': { $ref: '#/components/responses/Error', description: 'RATE_LIMITED (direct ingress)' }
         '503': { $ref: '#/components/responses/Error', description: 'SIMILARITY_UNAVAILABLE (embedding provider); Retry-After set' }
@@ -168,16 +169,35 @@ components:
         query: { type: string, description: 'UTF-8 text; blank → QUERY_EMPTY; size ≤ plan maxSimilarityQuerySize' }
         mode: { type: string, enum: [idea, wording], default: idea }
         includeSamples: { type: boolean, default: false }
-        limit: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        limit: { type: integer, minimum: 1, maximum: 50, default: 10, description: Page size }
+        minCosine:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: >
+            Optional cosine floor for close matches. When omitted, idea mode uses
+            close-match-threshold (default 0.82) and wording mode uses wording-threshold
+            (default 0.95).
+        cursor:
+          type: string
+          description: Opaque page cursor from a prior nextPageCursor (Next page).
     SimilarityResultRow:
       type: object
-      required: [registrationId, recordedAt, coarseScore, matchedPassageShare, candidateOnly]
+      required: [registrationId, recordedAt, coarseScore, matchedPassageShare, meanBestCosine, candidateOnly]
       additionalProperties: false
       properties:
         registrationId: { type: string }
         recordedAt: { type: string, format: date-time, description: TSA timestamp (ISO-8601 ms UTC) }
-        coarseScore: { type: number, minimum: 0, maximum: 1, multipleOf: 0.1 }
+        coarseScore: { type: number, minimum: 0, maximum: 1, multipleOf: 0.1, description: 'floor(matchedPassageShare × 10) / 10' }
         matchedPassageShare: { type: number, minimum: 0, maximum: 1 }
+        meanBestCosine:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: >
+            Mean of best close-match cosines across matched query passages
+            (similarity strength). Prefer this for UI score display; coarseScore
+            is share-based and is 1.0 for any single-passage query that hits.
         candidateOnly: { type: boolean, const: true }
         label: { type: string, description: 'Only for label_visible rows with non-empty label, or own rows' }
         isSample: { type: boolean }
@@ -192,6 +212,9 @@ components:
         comparedAgainstCount: { type: integer, minimum: 0 }
         message: { type: string, example: 'Compared against 42 opted-in registrations on MilliHash.' }
         modelVersion: { type: string }
+        nextPageCursor:
+          type: string
+          description: Present when more ranked hits remain; pass as request.cursor for the next page.
     SimilarityOverlapResponse:
       type: object
       required: [status]
