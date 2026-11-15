@@ -94,8 +94,11 @@ paths:
       summary: Refresh discovery fingerprints for a registration (FR20)
       description: |
         Registrant-only (authenticated `OwnerKey` must equal the registration's owner, else 403
-        `NOT_REGISTRATION_OWNER`). Re-upload the original file or text. Succeeds when **any** recomputed proof
-        digest hex overlaps **any** stored proof digest hex (text: `literal-v1`, `text-normalized-v2`,
+        `NOT_REGISTRATION_OWNER`). Re-upload the original asset using the **same content transport as FR1
+        server-computed**: multipart `file` + optional form `mediaType` (resolve or 400), or JSON `{ text }`
+        (UTF-8; no body contentType). Create-only fields (`submissionMode`, `registrantRole`, `label`,
+        `labelPublic`, `internalLabel`) are ignored if present. Succeeds when **any** recomputed proof digest
+        hex overlaps **any** stored proof digest hex (text: `literal-v1`, `text-normalized-v2`,
         `text-normalized-v1`; binary: `bytes-raw-v1`); client-supplied registrations are allowed when the hex
         overlaps the stored `client-supplied-v1` proof. No overlap → 409 `PROOF_HASH_MISMATCH`.
 
@@ -127,6 +130,12 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/FingerprintRefreshMultipartRequest'
+          application/vnd.millihash.v1+json:
+            schema:
+              $ref: '#/components/schemas/FingerprintRefreshJsonRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FingerprintRefreshJsonRequest'
       responses:
         '201':
           description: Fingerprint refresh committed
@@ -135,7 +144,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/FingerprintRefreshCreatedResponse'
         '400':
-          description: No / conflicting content (file and text both, or neither) or non-multipart request (HASH_FORMAT_INVALID)
+          description: Validation error (HASH_FORMAT_INVALID | MEDIA_TYPE_UNRESOLVED | MEDIA_TYPE_MISMATCH | TEXT_ENCODING_INVALID | SIMILARITY_TEXT_ONLY)
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -222,6 +231,7 @@ components:
       required:
         - submissionMode
         - registrantRole
+        - file
       properties:
         submissionMode:
           type: string
@@ -245,18 +255,14 @@ components:
           description: Owner-only private name; never on certificates or public APIs
         mediaType:
           type: string
-          description: Informational MIME hint
-        contentType:
-          type: string
-          enum: [binary, text]
-          default: binary
-        text:
-          type: string
-          description: Required when contentType=text (alternative to file part)
+          description: |
+            Optional form field. Resolved with magic-byte sniff when omitted/`application/octet-stream`.
+            Unresolved → 400 MEDIA_TYPE_UNRESOLVED; confident sniff mismatch → 400 MEDIA_TYPE_MISMATCH.
+            text/* file bytes decoded as UTF-8 (invalid → 400 TEXT_ENCODING_INVALID).
         file:
           type: string
           format: binary
-          description: Raw bytes for binary server-computed mode
+          description: Required asset bytes for multipart server-computed (text assets use JSON instead)
         similarityOptIn:
           type: boolean
           default: false
@@ -272,7 +278,7 @@ components:
       required:
         - submissionMode
         - registrantRole
-        - contentType
+        - text
       properties:
         submissionMode:
           type: string
@@ -283,11 +289,12 @@ components:
           description: |
             Required self-declared relationship to the asset (FR1-003). Never verified; immutable
             after create; not part of the VersionCommitment. Omitted/blank/unknown → 400 REGISTRANT_ROLE_REQUIRED.
-        contentType:
-          type: string
-          enum: [text]
         text:
           type: string
+          description: UTF-8 text asset (application/json implies text; no body contentType field)
+        mediaType:
+          type: string
+          description: Optional; must be text/* when present (defaults to text/plain)
         label:
           type: string
         labelPublic:
@@ -513,18 +520,43 @@ components:
           description: Present only when labelPublic=true and label non-empty
     FingerprintRefreshMultipartRequest:
       type: object
-      description: Provide exactly one of `file` or `text`.
+      required:
+        - file
+      description: |
+        Same content transport as FR1 server-computed multipart (file + optional mediaType).
+        Create-only fields are ignored if present.
       properties:
         file:
           type: string
           format: binary
           description: Original asset bytes
-        text:
-          type: string
-          description: Original text (trimmed like FR1 registration before hashing)
         mediaType:
           type: string
-          description: Optional media type override; defaults to the registration's media type
+          description: |
+            Optional; resolve with sniff when omitted. Unresolved/mismatch/UTF-8 errors as on FR1 create.
+        similarityOptIn:
+          type: boolean
+          default: false
+          description: |
+            FR21: opt an existing text Registration into similarity (pure-text only).
+            Binary with true → 400 SIMILARITY_TEXT_ONLY. Proof mismatch → 409 with no enqueue.
+        discoverability:
+          type: string
+          enum: [hidden, label_visible]
+          default: hidden
+    FingerprintRefreshJsonRequest:
+      type: object
+      required:
+        - text
+      description: |
+        Same content transport as FR1 server-computed JSON text. Create-only fields are ignored if present.
+      properties:
+        text:
+          type: string
+          description: Original UTF-8 text (trimmed like FR1 registration before hashing)
+        mediaType:
+          type: string
+          description: Optional; must be text/* when present (defaults to text/plain)
         similarityOptIn:
           type: boolean
           default: false
