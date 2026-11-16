@@ -3,28 +3,24 @@ info:
   title: MilliHash Registration API
   version: 1.1.0
   description: |
-    FR1 — Register an Asset. Authenticated RapidAPI ingress only.
-    Error envelope shape published by api-platform (002-api-platform).
-
-    Multi-digest + labels: create returns typed `digests[]` and label fields.
-    Mutable `labelPublic` / `internalLabel` after create are owned by registrant-portfolio
-    via PATCH /registrations/{registrationId} (registrant-portfolio OpenAPI) — not FR1 POST.
+    Register assets and refresh discovery fingerprints. Create returns typed `digests[]` and labels.
+    Patch label visibility / internal name via `PATCH /registrations/{registrationId}` (portfolio).
 servers:
-  - url: https://api.millihash.com
-    description: Production API (RapidAPI authenticated ingress for FR1)
+  - url: https://millihash.p.rapidapi.com
+    description: Authenticated API
 paths:
   /registrations:
     post:
       operationId: createRegistration
-      summary: Register an asset hash with RFC 3161 TSA timestamp
+      summary: Register an asset
       description: |
-        Synchronous registration pipeline: resolve typed proof digests (or accept client-supplied
-        hash as client-supplied-v1), compute VersionCommitment (`contentHash`), acquire TSA token
-        over that commitment, enforce per-registrant uniqueness per proof digest (the same registrant re-registering a proof digest is
-        rejected; a different registrant succeeds with a prior-registration notice), persist Registration,
-        enqueue AnchorJob. Asset bytes are never stored. Client-supplied mode accepts hash hex
-        only (no file upload). Optional immutable `label`; optional `labelPublic` (default false);
-        optional `internalLabel` (registrant-only).
+        Hash the asset (or accept a client-supplied SHA-256), timestamp a version commitment with
+        RFC 3161 TSA, persist the registration, and enqueue Bitcoin anchoring.
+
+        - **JSON** — text (`text`) or client-supplied (`hash`); no body `contentType`.
+        - **Multipart** — required `file` + optional `mediaType` (sniff if omitted).
+        - Asset bytes are never stored — only digests and metadata.
+        - Same proof digest by the same caller → 409; other callers may succeed with a prior-registration notice.
       tags:
         - Registrations
       security:
@@ -48,9 +44,8 @@ paths:
       responses:
         '201':
           description: |
-            Registration created. When other registrants already registered one or more of the same proof
-            digests, `priorRegistrationNotice` is included (earliest prior TSA timestamp + later match count;
-            never who registered them).
+            Registration created. May include `priorRegistrationNotice` when other registrants
+            already hold overlapping proof digests (earliest TSA + later count; never identities).
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -59,7 +54,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RegistrationCreatedResponse'
         '400':
-          description: Validation error (hash format, label size, client-supplied file upload, missing/invalid registrantRole → REGISTRANT_ROLE_REQUIRED)
+          description: Validation error (hash, media type, label size, registrantRole, …)
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -71,7 +66,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '409':
-          description: Duplicate proof digest by the same registrant (DUPLICATE_HASH sequential, DUPLICATE_HASH_RACE concurrent)
+          description: Duplicate proof digest for this caller (DUPLICATE_HASH / DUPLICATE_HASH_RACE)
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -91,29 +86,16 @@ paths:
   /registrations/{registrationId}/fingerprint-refreshes:
     post:
       operationId: createFingerprintRefresh
-      summary: Refresh discovery fingerprints for a registration (FR20)
+      summary: Refresh discovery fingerprints
       description: |
-        Registrant-only (authenticated `RegistrantKey` must equal the registration's owner, else 403
-        `NOT_ASSET_REGISTRANT`). Re-upload the original asset using the **same content transport as FR1
-        server-computed**: multipart `file` + optional form `mediaType` (resolve or 400), or JSON `{ text }`
-        (UTF-8; no body contentType). Create-only fields (`submissionMode`, `registrantRole`, `label`,
-        `labelPublic`, `internalLabel`) are ignored if present. Succeeds when **any** recomputed proof digest
-        hex overlaps **any** stored proof digest hex (text: `literal-v1`, `text-normalized-v2`,
-        `text-normalized-v1`; binary: `bytes-raw-v1`); client-supplied registrations are allowed when the hex
-        overlaps the stored `client-supplied-v1` proof. No overlap → 409 `PROOF_HASH_MISMATCH`.
+        Re-upload the **original** asset for a registration you own. Proof digests, version commitment,
+        and original TSA stay unchanged. On success, MilliHash adds discovery fingerprints, advances
+        `fingerprintSetVersion`, and creates a separately timestamped / anchored `FingerprintRefresh`.
 
-        Discovery-only: proof digests, VersionCommitment (`contentHash`) and the original TSA token are never
-        mutated. On success a `FingerprintRefresh` (`linkKind=fingerprint_refresh`) with its own TSA token and
-        AnchorJob is created (tip digests = this attempt only); the registration's `fingerprintSetVersion` is
-        advanced; parent `role=discovery` digests are **union-merged by algorithm id** (overwrite successes;
-        retain prior for failed/omitted producers). Already-current `fingerprintSetVersion` does not block.
-        Pure-text V1 may commit an empty discovery tip. Partial producer success may commit under the union
-        rule; zero entitled producers → 403 `FINGERPRINT_NOT_ENTITLED`; all entitled producers fail → 503
-        `FINGERPRINT_PRODUCERS_FAILED` (nothing committed). TSA exhaustion → 502 `TSA_PROVIDERS_EXHAUSTED`
-        (no row, no version bump, no discovery merge). Concurrent refreshes: exactly one 201, others 409
-        `FINGERPRINT_REFRESH_RACE`. A client disconnect before the response is emitted rolls everything back
-        (including undoing discovery merge). Async audit `fingerprint.refresh` on success. A refresh does
-        **not** consume monthly registration quota (FR20-006).
+        - **JSON** — `{ "text": "..." }` for text registrations.
+        - **Multipart** — `file` + optional `mediaType`.
+        - Proof match required (any overlapping proof hex); else 409 `PROOF_HASH_MISMATCH`.
+        - Does not consume registration quota.
       tags:
         - Registrations
       security:
@@ -122,6 +104,7 @@ paths:
         - name: registrationId
           in: path
           required: true
+          description: Registration to refresh (must be yours)
           schema:
             type: string
       requestBody:
@@ -193,13 +176,10 @@ paths:
 components:
   securitySchemes:
     RapidApiKey:
-      type: apiKey
-      in: header
-      name: X-RapidAPI-Key
-      description: Validated at RapidAPI gateway; backend trusts injected identity headers
+      $ref: 'common.openapi.yaml#/components/securitySchemes/RapidApiKey'
   schemas:
     ErrorEnvelope:
-      $ref: '../002-api-platform/contracts/error-envelope.schema.json'
+      $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
     ContentDigest:
       type: object
       required: [role, algorithm, transform, digestHex]
@@ -209,23 +189,22 @@ components:
           type: string
           enum: [proof, discovery]
           description: |
-            `proof` digests are claimed, committed (VersionCommitment) and FR2-verifiable. `discovery`
-            digests (FR22 media similarity candidates) are never claimed, never committed and never proof.
+            `proof` — claimed, committed, and verifiable via `POST /verify`.
+            `discovery` — media similarity fingerprints only; never claimed or proof.
         algorithm:
           type: string
           description: |
-            Proof: `sha256`. Discovery (FR22): `pdq`, `pdq-rot90|rot180|rot270|flipx|flipy|flipplus90|flipminus90`,
-            `imagehash-phash`, `vpdq`, `chromaprint`. Production producers use native PDQ / imagehash-pHash
-            (`pdq-v1` / `imagehash-phash-v1`); vPDQ / Chromaprint use platform tools when available
-            (`vpdq-v1` / `chromaprint-v1`) and fail-open otherwise.
+            Proof: `sha256`. Discovery: `pdq` (+ rotation/flip variants), `imagehash-phash`,
+            `vpdq`, `chromaprint`.
         transform:
           type: string
           description: |
-            Versioned transform id — V1 proof producers:
-            bytes-raw-v1 | literal-v1 | text-normalized-v2 | client-supplied-v1
+            Versioned transform id. Proof examples: `bytes-raw-v1`, `literal-v1`,
+            `text-normalized-v2`, `client-supplied-v1`.
         digestHex:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Lowercase hex digest
     ServerComputedMultipartRequest:
       type: object
       required:
@@ -236,43 +215,43 @@ components:
         submissionMode:
           type: string
           enum: [server-computed]
+          description: Must be `server-computed` for multipart uploads
         registrantRole:
           type: string
           enum: [creator, witness]
           description: |
-            Required self-declared relationship to the asset (FR1-003). Never verified; immutable
-            after create; not part of the VersionCommitment. Omitted/blank/unknown → 400 REGISTRANT_ROLE_REQUIRED.
+            Self-declared relationship to the asset. Not verified; immutable after create.
+            Omitted/blank/unknown → 400 `REGISTRANT_ROLE_REQUIRED`.
         label:
           type: string
           maxLength: 200
-          description: Immutable after create; omit/blank → permanent empty
+          description: Immutable display label; omit/blank → permanently empty
         labelPublic:
           type: boolean
           default: false
-          description: Forced false when label empty; mutable later via PATCH (FR3)
+          description: Show `label` on public verify; forced false when label empty. Mutable via PATCH.
         internalLabel:
           type: string
-          description: Registrant-only private name; never on certificates or public APIs
+          description: Private name; never on certificates or public APIs
         mediaType:
           type: string
           description: |
-            Optional form field. Resolved with magic-byte sniff when omitted/`application/octet-stream`.
-            Unresolved → 400 MEDIA_TYPE_UNRESOLVED; confident sniff mismatch → 400 MEDIA_TYPE_MISMATCH.
-            text/* file bytes decoded as UTF-8 (invalid → 400 TEXT_ENCODING_INVALID).
+            Optional MIME. Sniffed when omitted or `application/octet-stream`.
+            Unresolved → 400 `MEDIA_TYPE_UNRESOLVED`; sniff mismatch → 400 `MEDIA_TYPE_MISMATCH`.
+            `text/*` file bytes must be valid UTF-8.
         file:
           type: string
           format: binary
-          description: Required asset bytes for multipart server-computed (text assets use JSON instead)
+          description: Asset bytes (prefer JSON `{ text }` for pure text)
         similarityOptIn:
           type: boolean
           default: false
-          description: |
-            FR21: opt into similarity indexing. Text-only; binary or client-supplied with true → 400 SIMILARITY_TEXT_ONLY.
+          description: Opt into similarity indexing. Text-only; binary with true → 400 `SIMILARITY_TEXT_ONLY`.
         discoverability:
           type: string
           enum: [hidden, label_visible]
           default: hidden
-          description: "FR21: how the registration appears in similarity results when opted in"
+          description: How this registration appears in similarity results when opted in
     ServerComputedJsonRequest:
       type: object
       required:
@@ -283,34 +262,39 @@ components:
         submissionMode:
           type: string
           enum: [server-computed]
+          description: Must be `server-computed` for server-hashed text
         registrantRole:
           type: string
           enum: [creator, witness]
           description: |
-            Required self-declared relationship to the asset (FR1-003). Never verified; immutable
-            after create; not part of the VersionCommitment. Omitted/blank/unknown → 400 REGISTRANT_ROLE_REQUIRED.
+            Self-declared relationship to the asset. Not verified; immutable after create.
+            Omitted/blank/unknown → 400 `REGISTRANT_ROLE_REQUIRED`.
         text:
           type: string
-          description: UTF-8 text asset (application/json implies text; no body contentType field)
+          description: UTF-8 text asset (no body `contentType` field)
         mediaType:
           type: string
-          description: Optional; must be text/* when present (defaults to text/plain)
+          description: Optional; must be `text/*` when present (defaults to `text/plain`)
         label:
           type: string
+          maxLength: 200
+          description: Immutable display label; omit/blank → permanently empty
         labelPublic:
           type: boolean
           default: false
+          description: Show `label` on public verify; mutable via PATCH
         internalLabel:
           type: string
+          description: Private name; never on certificates or public APIs
         similarityOptIn:
           type: boolean
           default: false
-          description: |
-            FR21: opt into similarity indexing (text JSON only). Binary/client-supplied → 400 SIMILARITY_TEXT_ONLY.
+          description: Opt into similarity indexing (text only)
         discoverability:
           type: string
           enum: [hidden, label_visible]
           default: hidden
+          description: How this registration appears in similarity results when opted in
     ClientSuppliedJsonRequest:
       type: object
       required:
@@ -321,24 +305,31 @@ components:
         submissionMode:
           type: string
           enum: [client-supplied]
+          description: Must be `client-supplied` when sending a precomputed hash
         registrantRole:
           type: string
           enum: [creator, witness]
           description: |
-            Required self-declared relationship to the asset (FR1-003). Never verified; immutable
-            after create; not part of the VersionCommitment. Omitted/blank/unknown → 400 REGISTRANT_ROLE_REQUIRED.
+            Self-declared relationship to the asset. Not verified; immutable after create.
+            Omitted/blank/unknown → 400 `REGISTRANT_ROLE_REQUIRED`.
         hash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Client-computed SHA-256 hex (no file upload)
         mediaType:
           type: string
+          description: Optional MIME hint for the hashed asset
         label:
           type: string
+          maxLength: 200
+          description: Immutable display label; omit/blank → permanently empty
         labelPublic:
           type: boolean
           default: false
+          description: Show `label` on public verify; mutable via PATCH
         internalLabel:
           type: string
+          description: Private name; never on certificates or public APIs
 
     RegistrationCreatedResponse:
       type: object
@@ -359,26 +350,26 @@ components:
         registrationId:
           type: string
           format: uuid
+          description: New registration id
         hash:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: Designated primary proof digest (compat)
+          description: Primary proof digest (compat alias of the designated proof)
         digests:
           type: array
           minItems: 1
+          description: Typed proof (and any discovery) digests
           items:
             $ref: '#/components/schemas/ContentDigest'
         fingerprintSetVersion:
           type: string
           description: |
-            FR22. Full entitled discovery-fingerprint attempt set for the asset's media type and the
-            caller's plan (e.g. `fsv1:image:imagehash-phash@imagehash-phash-v1,pdq@pdq-v1`). Present only when
-            at least one producer was entitled; a partial producer failure does not narrow it.
-            Images: all plans; video + audio: PRO+.
+            Entitled discovery-fingerprint producer set for this media type and plan
+            (present when at least one producer was entitled). Images: all plans; video/audio: PRO+.
         contentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: VersionCommitment hex (standalone); computed over proof digests only
+          description: Version commitment hex over proof digests only
         submissionMode:
           type: string
           enum: [server-computed, client-supplied]
@@ -387,35 +378,36 @@ components:
           enum: [creator, witness]
         label:
           type: string
+          description: Immutable display label (may be empty)
         labelPublic:
           type: boolean
         internalLabel:
           type: string
           nullable: true
-          description: Registrant-only; present on authenticated create response
+          description: Private name; present on authenticated create
         discoverability:
           type: string
           enum: [hidden, label_visible]
-          description: "FR21: present when opted into similarity"
+          description: Present when opted into similarity
         similarityIndexStatus:
           type: string
           enum: [pending, indexed, failed]
-          description: "FR21: `pending` on opt-in 201; omitted when not opted in"
+          description: "`pending` on opt-in create; omitted when not opted in"
         tsaTimestamp:
           type: string
           format: date-time
-          description: UTC ISO-8601 with millisecond precision from TSA token
+          description: TSA timestamp (UTC, ms)
         tsaProvider:
           type: string
+          description: TSA provider that issued the token
         certificateUrl:
           type: string
           format: uri-reference
+          description: Relative URL to download the certificate PDF
         keepOriginalsNotice:
           type: string
           minLength: 1
-          description: |
-            FR1-017 / FR20-008. Required non-empty keep-originals reminder (same contract as
-            FingerprintRefreshCreatedResponse.keepOriginalsNotice).
+          description: Reminder to keep original files for future refresh / re-verify
         c2pa:
           $ref: '#/components/schemas/C2paMetadata'
         priorRegistrationNotice:
@@ -423,8 +415,8 @@ components:
     PriorRegistrationNotice:
       type: object
       description: |
-        FR1-020. Present only when other registrants already registered a matching proof digest.
-        Never identifies the other registrants.
+        Present when other registrants already hold a matching proof digest.
+        Never identifies those registrants.
       required:
         - earliestPriorTsaTimestamp
         - laterMatchCount
@@ -433,11 +425,11 @@ components:
         earliestPriorTsaTimestamp:
           type: string
           format: date-time
-          description: Earliest TSA timestamp among other registrants' matching registrations (UTC, millisecond precision)
+          description: Earliest other-registrant TSA timestamp among matches (UTC, ms)
         laterMatchCount:
           type: integer
           minimum: 0
-          description: Number of other-registrant matching registrations after the earliest one
+          description: Additional other-registrant matches after the earliest
     C2paMetadata:
       type: object
       required:
@@ -463,10 +455,7 @@ components:
           type: boolean
         trustNotice:
           type: string
-          description: |
-            Literal display string per FR1-028:
-            "C2PA signer verified against C2PA Trust List as of registration time" or
-            "C2PA signer not found on Trust List at registration time"
+          description: Human-readable C2PA trust-list notice captured at registration
     DuplicateRegistrationResponse:
       allOf:
         - $ref: '#/components/schemas/ErrorEnvelope'
@@ -487,14 +476,15 @@ components:
         - tsaProvider
         - certificateUrl
       description: |
-        409 existingRegistration. Include `label` only when labelPublic=true and label
-        non-empty. Never include internalLabel.
+        Existing registration returned on 409 duplicate. Includes `label` only when
+        `labelPublic` and non-empty. Never includes `internalLabel`.
       properties:
         registrationId:
           type: string
           format: uuid
         hash:
           type: string
+          description: Primary proof digest
         digests:
           type: array
           items:
@@ -517,13 +507,13 @@ components:
           type: string
         label:
           type: string
-          description: Present only when labelPublic=true and label non-empty
+          description: Present only when `labelPublic` and non-empty
     FingerprintRefreshMultipartRequest:
       type: object
       required:
         - file
       description: |
-        Same content transport as FR1 server-computed multipart (file + optional mediaType).
+        Same transport as create multipart (`file` + optional `mediaType`).
         Create-only fields are ignored if present.
       properties:
         file:
@@ -532,41 +522,40 @@ components:
           description: Original asset bytes
         mediaType:
           type: string
-          description: |
-            Optional; resolve with sniff when omitted. Unresolved/mismatch/UTF-8 errors as on FR1 create.
+          description: Optional MIME; sniffed when omitted (same rules as create)
         similarityOptIn:
           type: boolean
           default: false
           description: |
-            FR21: opt an existing text Registration into similarity (pure-text only).
-            Binary with true → 400 SIMILARITY_TEXT_ONLY. Proof mismatch → 409 with no enqueue.
+            Opt an existing text registration into similarity. Binary with true → 400.
+            Proof mismatch → 409 with no enqueue.
         discoverability:
           type: string
           enum: [hidden, label_visible]
           default: hidden
+          description: Similarity visibility when opting in
     FingerprintRefreshJsonRequest:
       type: object
       required:
         - text
       description: |
-        Same content transport as FR1 server-computed JSON text. Create-only fields are ignored if present.
+        Same transport as create JSON text. Create-only fields are ignored if present.
       properties:
         text:
           type: string
-          description: Original UTF-8 text (trimmed like FR1 registration before hashing)
+          description: Original UTF-8 text (trimmed like create before hashing)
         mediaType:
           type: string
-          description: Optional; must be text/* when present (defaults to text/plain)
+          description: Optional; must be `text/*` when present (defaults to `text/plain`)
         similarityOptIn:
           type: boolean
           default: false
-          description: |
-            FR21: opt an existing text Registration into similarity (pure-text only).
-            Binary with true → 400 SIMILARITY_TEXT_ONLY. Proof mismatch → 409 with no enqueue.
+          description: Opt an existing text registration into similarity
         discoverability:
           type: string
           enum: [hidden, label_visible]
           default: hidden
+          description: Similarity visibility when opting in
     FingerprintRefreshCreatedResponse:
       type: object
       required:
@@ -586,8 +575,10 @@ components:
       properties:
         fingerprintRefreshId:
           type: string
+          description: Id of this refresh record
         registrationId:
           type: string
+          description: Parent registration id
         linkKind:
           type: string
           enum: [fingerprint_refresh]
@@ -602,18 +593,19 @@ components:
         digests:
           type: array
           minItems: 0
-          description: New `role=discovery` digests only (empty for pure-text catalog tip)
+          description: New `role=discovery` digests only (empty for pure-text tip)
           items:
             $ref: '#/components/schemas/ContentDigest'
         fingerprintSetVersion:
           type: string
-          description: Producer set applied by this refresh (now also the registration's `fingerprintSetVersion`)
+          description: Producer set applied by this refresh (also written on the registration)
         previousFingerprintSetVersion:
           type: string
+          description: Prior producer set version when one existed
         tsaTimestamp:
           type: string
           format: date-time
-          description: Refresh-owned TSA timestamp (independent of the registration's)
+          description: Refresh-owned TSA timestamp (independent of the registration)
         tsaProvider:
           type: string
         createdAt:
@@ -623,33 +615,34 @@ components:
           $ref: '#/components/schemas/FingerprintLineage'
         keepOriginalsNotice:
           type: string
-          description: FR20-008 reminder to keep original files
+          description: Reminder to keep original files
         discoverability:
           type: string
           enum: [hidden, label_visible]
-          description: "FR21: echoed from the parent when opted into similarity"
+          description: Echoed from the parent when similarity-opted
         similarityIndexStatus:
           type: string
           enum: [pending, indexed, failed]
-          description: "FR21: pending on opt-in / failed retry"
+          description: Similarity index state after opt-in / retry
     FingerprintLineage:
       type: object
-      description: |
-        FR20-007 refresh lineage + outdated badge fields. Portfolio / My Registry (006) consumes the same shape
-        (T200 handoff).
+      description: Refresh lineage and outdated-badge fields for portfolio UIs
       required: [refreshCount, outdated]
       additionalProperties: false
       properties:
         fingerprintSetVersion:
           type: string
+          description: Current producer set version on the registration
         refreshCount:
           type: integer
           minimum: 0
+          description: Number of committed refreshes
         latestFingerprintRefreshId:
           type: string
+          description: Id of the most recent refresh
         latestRefreshedAt:
           type: string
           format: date-time
         outdated:
           type: boolean
-          description: True when the caller's plan currently entitles a newer/different producer set for this media type
+          description: True when the plan entitles a newer/different producer set for this media type

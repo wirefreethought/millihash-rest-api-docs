@@ -3,37 +3,27 @@ info:
   title: MilliHash Public Verification API
   version: 1.0.0
   description: |
-    Verify an asset (POST /verify).
-    Verify a certificate (GET /certificates/{id}/verify).
-    Check anchor confirmation (GET /anchors/{registrationId}, GET /anchors/{registrationId}/ots).
-    Verify a project chain (GET /projects/{projectId}/chain/verify).
-    Public activity stats (GET /stats) and sample proof (GET /sample).
-    Served on both instances: free instance directly with no authentication, and pro instance
-    through the RapidAPI proxy so subscribers can call every operation with one key and host.
-    Responses are identical on both instances.
+    Verify assets and certificates, check Bitcoin anchors, validate project chains,
+    and fetch public stats or the sample proof. No authentication required.
 servers:
-  - url: https://api.millihash.com
-    description: Free instance (direct public access)
-  - url: https://api.millihash.com
-    description: Pro instance (RapidAPI proxy ingress only)
+  - url: https://free-api.millihash.io
+    description: Free / public API
+  - url: https://millihash.p.rapidapi.com
+    description: Authenticated API
 paths:
   /verify:
     post:
       operationId: verifyAsset
-      summary: Verify an asset by file or text upload
+      summary: Verify an asset
       description: |
-        Server-computed SHA-256 (identical normalization to registration). Exact hash lookup.
-        No authentication. Response identical for anonymous and authenticated callers.
-        Does not re-extract C2PA from upload — echoes stored metadata only.
-        Binary assets use multipart; text assets use JSON (`contentType=text`).
+        Hash the upload with the same normalization as registration and look up exact proof matches.
+
+        - **Multipart** — `contentType=binary` + `file`.
+        - **JSON** — `contentType=text` + `text`.
+        - Does not re-extract C2PA from the upload; echoes stored metadata only.
       tags:
         - Public Verification
       security: []
-      servers:
-        - url: https://api.millihash.com
-          description: Free instance (direct public access)
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       requestBody:
         required: true
         content:
@@ -48,7 +38,7 @@ paths:
               $ref: '#/components/schemas/VerifyTextJsonRequest'
       responses:
         '200':
-          description: Verification hit or explicit not-found
+          description: Hit or explicit not-found
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -60,7 +50,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '413':
-          description: Asset too large for verify edge
+          description: Asset too large
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -78,29 +68,24 @@ paths:
   /certificates/{id}/verify:
     get:
       operationId: verifyCertificate
-      summary: Verify a Certificate by ID or hash
+      summary: Verify a certificate
       description: |
-        Accepts Certificate UUID or 64-char SHA-256 hex (case-insensitive, canonicalized lowercase).
-        Validates TSA token and optional LTV chain. Never returns anchor state or PDF bytes.
-        shareableUrl always keyed by certificateId.
+        Look up by certificate UUID or 64-char SHA-256 hex (case-insensitive).
+        Validates the TSA token and optional LTV chain. Does not return anchor state or PDF bytes.
+        `shareableUrl` is always keyed by certificate id.
       tags:
         - Public Verification
       security: []
-      servers:
-        - url: https://api.millihash.com
-          description: Free instance (direct public access)
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
-          description: Certificate UUID v4 or SHA-256 hex
+          description: Certificate UUID or SHA-256 hex
       responses:
         '200':
-          description: Verification hit or not-found
+          description: Hit or not-found
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -120,22 +105,18 @@ paths:
   /anchors/{registrationId}:
     get:
       operationId: getAnchorStatus
-      summary: Check Bitcoin anchor confirmation state
+      summary: Get Bitcoin anchor status
       description: |
-        Accepts Certificate UUID or SHA-256 hash. Returns AnchorJob snapshot.
-        Certificate validity invariant always true regardless of anchor state.
+        Look up by certificate UUID or SHA-256 hex. Returns the anchor job snapshot.
+        Certificate validity is independent of anchor state (`certificateStillValid` is always true on a hit).
       tags:
         - Public Verification
       security: []
-      servers:
-        - url: https://api.millihash.com
-          description: Free instance (direct public access)
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: registrationId
           in: path
           required: true
+          description: Certificate UUID or SHA-256 hex
           schema:
             type: string
       responses:
@@ -160,20 +141,16 @@ paths:
   /anchors/{registrationId}/ots:
     get:
       operationId: downloadAnchorOts
-      summary: Download OpenTimestamps proof file
-      description: Returns raw .ots bytes when anchor state is Confirmed.
+      summary: Download OpenTimestamps proof
+      description: Returns raw `.ots` bytes when the anchor is Confirmed; otherwise 404.
       tags:
         - Public Verification
       security: []
-      servers:
-        - url: https://api.millihash.com
-          description: Free instance (direct public access)
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: registrationId
           in: path
           required: true
+          description: Certificate UUID or SHA-256 hex
           schema:
             type: string
       responses:
@@ -185,28 +162,24 @@ paths:
                 type: string
                 format: binary
         '404':
-          description: No confirmed proof for identifier
+          description: No confirmed proof for this id
         '429':
           description: Rate limited
   /projects/{projectId}/chain/verify:
     get:
       operationId: verifyProjectChain
-      summary: Verify a project version chain
+      summary: Verify a project chain
       description: |
-        Public chain integrity verification. Validates sequential version numbers and
-        contentHash links. No authentication required.
+        Checks sequential version numbers and `contentHash` links for a project.
+        Public; no ownership required.
       tags:
         - Public Verification
       security: []
-      servers:
-        - url: https://api.millihash.com
-          description: Free instance (direct public access)
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       parameters:
         - name: projectId
           in: path
           required: true
+          description: Project UUID
           schema:
             type: string
             format: uuid
@@ -228,20 +201,12 @@ paths:
       operationId: getPublicStats
       summary: Get public activity stats
       description: |
-        Aggregate service activity for display on public pages. `timestampStandard` and
-        `anchoring` are always returned. `latestAnchorConfirmedAt` is returned only when a
-        Bitcoin anchor confirmed recently, and each `usage` field only once it reaches a
-        server-side threshold; omitted fields are absent rather than zero. Never returns
-        hashes, labels, registrant data, or per-registration identifiers. The sample proof
-        is excluded from all counts. Responses are cached for up to 60 seconds.
+        Aggregate service activity for public pages. Always includes `timestampStandard` and
+        `anchoring`. Optional fields appear only when thresholds are met (never zero-padded).
+        No hashes, labels, or registrant data. Cached up to 60 seconds.
       tags:
         - Public Verification
       security: []
-      servers:
-        - url: https://api.millihash.com
-          description: Free instance (direct public access)
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       responses:
         '200':
           description: Public activity stats
@@ -260,17 +225,11 @@ paths:
       operationId: getSampleProof
       summary: Get the sample proof
       description: |
-        Returns a text sample that MilliHash registered itself, so anyone can try
-        verification without their own content. Submit `text` to `POST /verify`
-        (contentType=text) to get a match.
+        Returns a MilliHash-registered text sample so you can try `POST /verify`
+        without your own content. Submit `text` unchanged with `contentType=text`.
       tags:
         - Public Verification
       security: []
-      servers:
-        - url: https://api.millihash.com
-          description: Free instance (direct public access)
-        - url: https://api.millihash.com
-          description: Pro instance (RapidAPI proxy ingress only)
       responses:
         '200':
           description: Sample proof
@@ -279,7 +238,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SampleProofResponse'
         '404':
-          description: Sample proof is not available on this deployment
+          description: Sample not available on this deployment
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -299,6 +258,7 @@ components:
         contentType:
           type: string
           enum: [binary]
+          description: Must be `binary` for multipart verify
         file:
           type: string
           format: binary
@@ -310,9 +270,10 @@ components:
         contentType:
           type: string
           enum: [text]
+          description: Must be `text` for JSON verify
         text:
           type: string
-          description: Text input (normalized before hash, identical to registration)
+          description: Text to normalize and hash (same pipeline as registration)
     PublicStatsResponse:
       type: object
       required: [timestampStandard, anchoring]
@@ -320,36 +281,41 @@ components:
         timestampStandard:
           type: string
           const: RFC 3161
+          description: Timestamp standard used by MilliHash
         anchoring:
           type: string
           const: bitcoin-opentimestamps
+          description: Anchoring mechanism
         latestAnchorConfirmedAt:
           type: string
           format: date-time
-          description: Omitted when no Bitcoin anchor has confirmed within the configured anchor window (default 7 days).
+          description: Omitted when no Bitcoin anchor confirmed in the recent window (default 7 days)
         usage:
           type: object
-          description: Present only when at least one field meets its threshold; each field is omitted below its threshold.
+          description: Present only when at least one field meets its threshold
           properties:
             registrations:
               type: integer
               format: int64
+              description: Registration count when above threshold
             confirmedAnchors:
               type: integer
               format: int64
+              description: Confirmed-anchor count when above threshold
             lastRegistrationAt:
               type: string
               format: date-time
-              description: Omitted when the latest registration is older than the configured recent window (default 24 hours).
+              description: Omitted when the latest registration is older than the recent window (default 24h)
     SampleProofResponse:
       type: object
       required: [text, certificateId, registeredAt, anchorState]
       properties:
         text:
           type: string
-          description: Exact registered text; submit unchanged to POST /verify to get a match.
+          description: Exact registered text — submit unchanged to `POST /verify`
         certificateId:
           type: string
+          description: Sample certificate id
         registeredAt:
           type: string
           format: date-time
@@ -362,9 +328,11 @@ components:
       properties:
         name:
           type: string
+          description: Registrant display name at registration time
         email:
           type: string
           format: email
+          description: Registrant email at registration time
     C2paMetadata:
       type: object
       required:
@@ -387,15 +355,15 @@ components:
           type: boolean
         trustNotice:
           type: string
+          description: Human-readable C2PA trust-list notice
     AssetVerificationResponse:
       oneOf:
         - $ref: '#/components/schemas/AssetVerificationHit'
         - $ref: '#/components/schemas/VerificationNotFound'
     LaterMatchSummary:
       type: object
+      description: Later multi-match row (not the earliest lead). No registrant PII; no certificate id.
       required: [registrationId, tsaTimestamp]
-      description: |
-        Later multi-match row (not the earliest lead). No registrant PII and no certificateId in V1.
       properties:
         registrationId:
           type: string
@@ -404,7 +372,7 @@ components:
           description: UTC ISO-8601 with millisecond precision
         label:
           type: string
-          description: Present only when labelPublic=true and label non-empty
+          description: Present only when `labelPublic` and label is non-empty
     AssetVerificationHit:
       type: object
       required:
@@ -421,9 +389,10 @@ components:
         hash:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: documentHash of the matched (lead) registration
+          description: Primary proof digest of the matched (lead) registration
         digests:
           type: array
+          description: Typed digests on the lead registration
           items:
             type: object
             required: [role, algorithm, transform, digestHex]
@@ -438,33 +407,33 @@ components:
                 type: string
         matchedAlgorithm:
           type: string
-          description: Algorithm of the proof digest that matched the verify input
+          description: Algorithm of the proof digest that matched the upload
         matchedTransform:
           type: string
-          description: Transform of the proof digest that matched the verify input
+          description: Transform of the proof digest that matched the upload
         matchedClass:
           type: string
           const: proof
-          description: Proof-class match only on this endpoint
+          description: Always `proof` on this endpoint
         registrantRole:
           type: string
-          description: Lead Registration registrantRole
+          description: Lead registration `registrantRole`
         label:
           type: string
-          description: Present only when labelPublic=true and label non-empty; never internalLabel
+          description: Present only when `labelPublic` and label is non-empty
         hitType:
           type: string
           enum: [standalone, chain_version]
         projectId:
           type: string
           format: uuid
-          description: Present when hitType is chain_version
+          description: Present when `hitType` is `chain_version`
         versionNumber:
           type: integer
-          description: Present when hitType is chain_version
+          description: Present when `hitType` is `chain_version`
         chainVerifyUrl:
           type: string
-          description: Public chain verify URL when hitType is chain_version
+          description: Public chain-verify URL when `hitType` is `chain_version`
         registrantSnapshot:
           $ref: '#/components/schemas/RegistrantSnapshot'
         tsaTimestamp:
@@ -477,22 +446,22 @@ components:
           enum: [server-computed, client-supplied]
         submissionModeNotice:
           type: string
-          description: Present only when submissionMode=client-supplied
+          description: Present only when `submissionMode` is `client-supplied`
         semanticsNotice:
           type: string
-          description: Fixed existence-only semantics notice (same literal as FR5)
+          description: Fixed existence-only semantics notice
         certificateVerificationUrl:
           type: string
           format: uri
         additionalMatchCount:
           type: integer
           minimum: 0
-          description: Count of later Registrations sharing the proof digest; omit or 0 when sole match
+          description: Later registrations sharing the proof digest; omit or 0 when sole match
         additionalMatches:
           type: array
           items:
             $ref: '#/components/schemas/LaterMatchSummary'
-          description: Present when additionalMatchCount > 0; plain-text summaries only
+          description: Present when `additionalMatchCount` > 0
         c2pa:
           $ref: '#/components/schemas/C2paMetadata'
     CertificateVerificationResponse:
@@ -518,6 +487,7 @@ components:
           format: uuid
         hash:
           type: string
+          description: Primary proof digest
         digests:
           type: array
           items:
@@ -534,14 +504,15 @@ components:
                 type: string
         label:
           type: string
-          description: Present only when labelPublic=true and label non-empty; never internalLabel
+          description: Present only when `labelPublic` and label is non-empty
         registrantRole:
           type: string
         matchedAlgorithm:
           type: string
-          description: Present when lookup was by digest match (hash path)
+          description: Present when lookup was by digest (hash path)
         matchedTransform:
           type: string
+          description: Present when lookup was by digest (hash path)
         matchedClass:
           type: string
           const: proof
@@ -559,7 +530,7 @@ components:
         shareableUrl:
           type: string
           format: uri
-          description: Always cert-id-keyed for the lead Registration
+          description: Always keyed by certificate id
         tsaValidation:
           $ref: '#/components/schemas/TsaValidationOutcome'
         ltvChain:
@@ -573,12 +544,12 @@ components:
         additionalMatchCount:
           type: integer
           minimum: 0
-          description: Hash path only — count of later proof-digest matches; omit on Certificate ID path
+          description: Hash path only — later proof-digest matches; omit on certificate-id path
         additionalMatches:
           type: array
           items:
             $ref: '#/components/schemas/LaterMatchSummary'
-          description: Hash path only when additionalMatchCount > 0
+          description: Hash path only when `additionalMatchCount` > 0
     TsaValidationOutcome:
       type: object
       required:
@@ -589,8 +560,10 @@ components:
       properties:
         signatureValid:
           type: boolean
+          description: Whether the TSA signature validates
         chainValidatedTo:
           type: string
+          description: Trust anchor the chain validated to
         timeOfStampWithinSigningCertValidity:
           type: boolean
         revocationChecked:
@@ -619,17 +592,21 @@ components:
         state:
           type: string
           enum: [Pending, Stamped, Confirmed, Failed]
+          description: Anchor job state
         shareableUrl:
           type: string
           format: uri
         certificateStillValid:
           type: boolean
           const: true
+          description: Always true on a hit — TSA validity is independent of Bitcoin confirmation
         otsBase64:
           type: string
+          description: Base64 OpenTimestamps proof when available
         otsDownloadUrl:
           type: string
           format: uri
+          description: URL to download raw `.ots` bytes when Confirmed
         bitcoinBlockConfirmationTime:
           type: string
           format: date-time
@@ -663,6 +640,7 @@ components:
         status:
           type: string
           enum: [valid, invalid, not_found]
+          description: Overall chain integrity result
         label:
           type: string
           nullable: true
@@ -674,6 +652,7 @@ components:
           nullable: true
         versions:
           type: array
+          description: Per-version chain summary (empty when not found)
           items:
             $ref: '#/components/schemas/ChainVersionSummary'
     ChainVersionSummary:
@@ -694,13 +673,16 @@ components:
         documentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Primary proof digest
         contentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Version commitment
         prevContentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
           nullable: true
+          description: Prior version commitment; null on genesis
         certificateId:
           type: string
           format: uuid

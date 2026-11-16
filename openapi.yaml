@@ -4,55 +4,44 @@ info:
   title: MilliHash API
   version: v1.0.0
   description: |
-    Product MilliHash REST API — all product-owned controllers documented per
-    `cross-cutting/api-contracts` (includes operator admin; excludes Actuator/springdoc).
+    MilliHash REST API for asset registration, verification, project lineage,
+    portfolio management, and opt-in similarity search.
 
-    MilliHash runs as **two deployments** against the same database:
+    **Hosts**
 
-    - **Free instance** — production public edge `https://free-api.millihash.io` (first-party SPA
-      Free mode). Logical third-party direct host `api.millihash.com` also serves unauthenticated
-      public verification. RapidAPI-authenticated routes
-      (`POST/GET /registrations`, certificate download) are disabled on the free deployment.
-    - **Pro instance** — reachable only through the RapidAPI proxy
-      (`https://millihash.p.rapidapi.com`, `X-RapidAPI-Host: millihash.p.rapidapi.com`). Serves
-      RapidAPI-authenticated registration, project, registrant-portfolio, and FR21 similarity
-      (overlap) routes, plus every public verification and similarity
-      search/sample route, so RapidAPI subscribers can call the whole API with one key.
+    - `https://free-api.millihash.io` — public verification, stats, and sample proof
+    - `https://millihash.p.rapidapi.com` — authenticated registration, portfolio, projects,
+      similarity, plan, plus the same public verification routes
+    - `https://app.millihash.com` — operator admin audit (Auth0 JWT)
 
-    **Authenticated endpoints** require `X-RapidAPI-Key` (pro instance / RapidAPI ingress only).
-
-    **Public verification endpoints** require no authentication on the free instance and are
-    also available to RapidAPI subscribers on the pro instance, with identical responses.
-
-    **Operator admin** (`GET /admin/audit`) is documented below for completeness. It is served on
-    `app.millihash.com` with Auth0 JWT — not via RapidAPI or the public free/direct API edge.
+    Authenticated routes require `X-RapidAPI-Key`. Public verification routes require no auth.
   x-logo:
     url: logo.png
     backgroundColor: "#FFFFFF"
 
 servers:
   - url: https://free-api.millihash.io
-    description: Free/public production (first-party SPA Free mode)
+    description: Free / public API
   - url: https://millihash.p.rapidapi.com
-    description: Subscription / RapidAPI authenticated ingress
-  - url: https://api.millihash.com
-    description: Logical third-party direct public edge
+    description: Authenticated API
   - url: https://app.millihash.com
-    description: Operator admin console (Auth0 JWT)
+    description: Operator admin console
 
 tags:
   - name: Admin Audit
-    description: Operator audit search (Auth0 JWT on app host — not RapidAPI)
+    description: Operator audit search (Auth0 JWT)
   - name: Registrations
-    description: Asset hash registration (pro / RapidAPI only)
+    description: Register assets and refresh discovery fingerprints
   - name: Project Lineage
-    description: Project create and version append (pro / RapidAPI only)
+    description: Create projects and append versions
   - name: Registrant Portfolio
-    description: Registrant registry, projects, and certificate download (pro / RapidAPI only)
+    description: List registrations/projects and download certificates
   - name: Public Verification
-    description: Asset, certificate, and anchor verification, plus public stats and sample proof (free instance, and pro via RapidAPI)
+    description: Verify assets, certificates, anchors, chains; public stats and sample
   - name: Similarity Search
-    description: Opt-in semantic text similarity search and samples (FR21; RapidAPI / pro only)
+    description: Opt-in semantic text similarity search and samples
+  - name: Plan
+    description: Current plan and upload / query ceilings
 
 paths:
   /registrations:
@@ -63,6 +52,9 @@ paths:
   /registrations/{registrationId}:
     patch:
       $ref: 'openapi/registrant-portfolio.openapi.yaml#/paths/~1registrations~1{registrationId}/patch'
+  /registrations/{registrationId}/fingerprint-refreshes:
+    post:
+      $ref: 'openapi/registrations.openapi.yaml#/paths/~1registrations~1{registrationId}~1fingerprint-refreshes/post'
   /certificates/{certificateId}:
     $ref: 'openapi/registrant-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}'
   /certificates/{certificateId}/anchored:
@@ -121,6 +113,8 @@ components:
       $ref: 'openapi/registrations.openapi.yaml#/components/schemas/RegistrationCreatedResponse'
     DuplicateRegistrationResponse:
       $ref: 'openapi/registrations.openapi.yaml#/components/schemas/DuplicateRegistrationResponse'
+    FingerprintRefreshCreatedResponse:
+      $ref: 'openapi/registrations.openapi.yaml#/components/schemas/FingerprintRefreshCreatedResponse'
     RegistrationLabelPatchRequest:
       $ref: 'openapi/registrant-portfolio.openapi.yaml#/components/schemas/RegistrationLabelPatchRequest'
     RegistrationLabelPatchResponse:

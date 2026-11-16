@@ -3,19 +3,18 @@ info:
   title: MilliHash Registrant Portfolio API
   version: 1.0.0
   description: |
-    Registrant registry listing, certificate download, and registrant project list/detail.
-    Authenticated RapidAPI ingress only. Error envelope from api-platform.
+    List and manage your registrations and projects, and download certificate PDFs.
 servers:
-  - url: https://api.millihash.com
-    description: Production API (RapidAPI authenticated ingress)
+  - url: https://millihash.p.rapidapi.com
+    description: Authenticated API
 paths:
   /projects:
     get:
       operationId: listRegistrantProjects
-      summary: List projects owned by the authenticated user
+      summary: List your projects
       description: |
-        Registrant-scoped project list. Page size 50, ordered by createdAt DESC then projectId ASC.
-        Opaque HMAC-signed cursor pagination via `cursor` / `nextPageCursor` (same pattern as registry).
+        Cursor-paginated list of projects you own (page size 50).
+        Ordered by `createdAt` descending, then `projectId` ascending.
       tags:
         - Registrant Portfolio
       security:
@@ -24,7 +23,7 @@ paths:
         - name: cursor
           in: query
           required: false
-          description: Opaque signed pagination cursor from prior `nextPageCursor`. Omit for first page.
+          description: Opaque cursor from a prior `nextPageCursor`. Omit for the first page.
           schema:
             type: string
       responses:
@@ -49,8 +48,8 @@ paths:
   /projects/{projectId}:
     get:
       operationId: getRegistrantProject
-      summary: Get project detail with version timeline
-      description: Registrant-scoped project detail including ordered version summaries.
+      summary: Get project detail
+      description: Returns a project you own, including an ordered version timeline.
       tags:
         - Registrant Portfolio
       security:
@@ -59,6 +58,7 @@ paths:
         - name: projectId
           in: path
           required: true
+          description: Project id (must be yours)
           schema:
             type: string
             format: uuid
@@ -76,7 +76,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
-          description: Not project registrant
+          description: Not the project registrant
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -90,17 +90,12 @@ paths:
   /registrations:
     get:
       operationId: listRegistrantRegistrations
-      summary: List Registrations owned by the authenticated user
+      summary: List your registrations
       description: |
-        Registrant-scoped, cursor-paginated registry dashboard. Fixed page size 50.
-        Default sort: `tsaTimestamp` descending, `registrationId` ascending tie-break.
-        Optional `sort`: `label` (display-name semantics: internalLabel then label; default ascending),
-        `bitcoinBlockConfirmationTime` (default descending), or `tsaTimestamp`.
-        Optional `direction`: `asc` or `desc` (defaults per sort field).
-        Tie-break is always `registrationId` ascending. Missing on-chain times follow MongoDB null ordering
-        (first on asc, last on desc).
-        Listing does not invoke per-row anchor lookup.
-        Rows include digests, label, labelPublic, internalLabel, and displayName.
+        Cursor-paginated registry of registrations you own (page size 50).
+        Default sort: `tsaTimestamp` descending. Optional `sort` / `direction`;
+        tie-break is always `registrationId` ascending.
+        Rows include digests, labels, display name, and anchor state (no per-row anchor lookup).
       tags:
         - Registrant Portfolio
       security:
@@ -109,13 +104,15 @@ paths:
         - name: cursor
           in: query
           required: false
-          description: Opaque signed pagination cursor from prior `nextPageCursor`. Omit for first page.
+          description: Opaque cursor from a prior `nextPageCursor`. Omit for the first page.
           schema:
             type: string
         - name: sort
           in: query
           required: false
-          description: Primary sort field. Default `tsaTimestamp`.
+          description: |
+            Primary sort field. `label` uses display-name order (`internalLabel`, then `label`).
+            Default `tsaTimestamp`.
           schema:
             type: string
             enum: [tsaTimestamp, label, bitcoinBlockConfirmationTime]
@@ -124,14 +121,14 @@ paths:
           in: query
           required: false
           description: |
-            Sort direction. Defaults: `tsaTimestamp`/`bitcoinBlockConfirmationTime` → `desc`;
+            Sort direction. Defaults: `tsaTimestamp` / `bitcoinBlockConfirmationTime` → `desc`;
             `label` → `asc`.
           schema:
             type: string
             enum: [asc, desc]
       responses:
         '200':
-          description: Registrant registry page
+          description: Registry page
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -140,7 +137,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RegistryListingResponse'
         '400':
-          description: Invalid cursor or sort/direction
+          description: Invalid cursor, sort, or direction
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -154,14 +151,12 @@ paths:
   /registrations/{registrationId}:
     patch:
       operationId: patchRegistrationLabels
-      summary: Update registrant label metadata
+      summary: Update registration labels
       description: |
-        Accepts any subset of `labelPublic`, `internalLabel`, and `discoverability` (`hidden` |
-        `label_visible`). Immutable `label` and proof digests MUST NOT be accepted.
-        `labelPublic=true` when `label` is empty → HTTP 400.
-        `discoverability` on a Registration not opted into FR21 similarity → HTTP 400
-        `SIMILARITY_NOT_OPTED_IN`. Oversized `internalLabel` → HTTP 400
-        `INTERNAL_LABEL_TOO_LARGE` (plan `maxInternalLabelLength`).
+        Patch any subset of `labelPublic`, `internalLabel`, and `discoverability`.
+        Immutable `label` and proof digests are rejected.
+        `labelPublic=true` with an empty label → 400.
+        `discoverability` requires similarity opt-in → else 400 `SIMILARITY_NOT_OPTED_IN`.
       tags:
         - Registrant Portfolio
       security:
@@ -170,6 +165,7 @@ paths:
         - name: registrationId
           in: path
           required: true
+          description: Registration to update (must be yours)
           schema:
             type: string
             format: uuid
@@ -190,7 +186,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RegistrationLabelPatchResponse'
         '400':
-          description: Invalid patch (empty label with labelPublic=true, unknown fields, SIMILARITY_NOT_OPTED_IN, or INTERNAL_LABEL_TOO_LARGE)
+          description: Invalid patch (empty public label, unknown fields, not opted in, or internal label too large)
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -202,7 +198,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
-          description: Not asset registrant
+          description: Not the asset registrant
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -216,11 +212,10 @@ paths:
   /certificates/{certificateId}:
     get:
       operationId: downloadCertificate
-      summary: Download Certificate PDF
+      summary: Download certificate PDF
       description: |
-        Renders the Certificate PDF on demand from the Registration projection. With a fixed renderer version,
-        repeated downloads produce byte-identical PDFs. Registrant must match stored RegistrantKey.
-        Response is raw PDF bytes (not JSON).
+        Renders the certificate PDF on demand for a registration you own.
+        Same renderer version → byte-identical PDFs on repeat download.
       tags:
         - Registrant Portfolio
       security:
@@ -229,6 +224,7 @@ paths:
         - name: certificateId
           in: path
           required: true
+          description: Certificate UUID
           schema:
             type: string
             format: uuid
@@ -239,7 +235,7 @@ paths:
             Content-Disposition:
               schema:
                 type: string
-              description: Label-based filename when Registration has a label; certificateId fallback otherwise.
+              description: Label-based filename when present; otherwise certificateId.
               examples:
                 labelBased:
                   value: attachment; filename="millihash-my-asset.pdf"
@@ -257,13 +253,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
-          description: Authenticated user is not the asset registrant
+          description: Not the asset registrant
           content:
             application/vnd.millihash.v1+json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '404':
-          description: Certificate / Registration not found
+          description: Certificate not found
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -271,10 +267,10 @@ paths:
   /certificates/{certificateId}/anchored:
     get:
       operationId: downloadAnchoredCertificate
-      summary: Download anchored Certificate PDF
+      summary: Download anchored certificate PDF
       description: |
-        Renders the Layer-1 + Bitcoin Anchor Certificate PDF on demand when AnchorJob is Confirmed.
-        Returns 409 ANCHOR_NOT_CONFIRMED when Pending, Stamped, or Failed. Registrant must match stored RegistrantKey.
+        Renders the Layer-1 + Bitcoin-anchored certificate PDF when the anchor is Confirmed.
+        Pending / Stamped / Failed → 409 `ANCHOR_NOT_CONFIRMED`.
       tags:
         - Registrant Portfolio
       security:
@@ -283,12 +279,13 @@ paths:
         - name: certificateId
           in: path
           required: true
+          description: Certificate UUID
           schema:
             type: string
             format: uuid
       responses:
         '200':
-          description: Anchored Certificate PDF
+          description: Anchored certificate PDF
           headers:
             Content-Disposition:
               schema:
@@ -310,13 +307,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
-          description: Authenticated user is not the asset registrant
+          description: Not the asset registrant
           content:
             application/vnd.millihash.v1+json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '404':
-          description: Certificate / Registration not found
+          description: Certificate not found
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -340,9 +337,11 @@ components:
       properties:
         identityProvider:
           type: string
+          description: Identity provider id
           example: rapidapi
         userId:
           type: string
+          description: Stable user id within the provider
           example: usr_alice
     RegistryListingResponse:
       type: object
@@ -351,12 +350,13 @@ components:
         items:
           type: array
           maxItems: 50
+          description: Registrations on this page
           items:
             $ref: '#/components/schemas/RegistryListingRow'
         nextPageCursor:
           type: string
           nullable: true
-          description: Opaque cursor for next page; null when no further pages.
+          description: Cursor for the next page; null when done
     RegistryListingRow:
       type: object
       required:
@@ -377,25 +377,29 @@ components:
         registrationId:
           type: string
           format: uuid
+          description: Registration id
         registrantKey:
           $ref: '#/components/schemas/RegistrantKey'
         label:
           type: string
           nullable: true
+          description: Immutable public/display label set at create
         labelPublic:
           type: boolean
+          description: Whether `label` is shown on public verify responses
         internalLabel:
           type: string
-          description: Registrant-only private name; never on certificates or public verify
+          description: Private name; never on certificates or public APIs
         displayName:
           type: string
-          description: internalLabel if non-empty, else label
+          description: "`internalLabel` if set, otherwise `label`"
         hashTruncated:
           type: string
-          description: First 8 + ellipsis + last 8 hex characters of SHA-256 hash
+          description: Truncated primary proof digest (first 8 … last 8 hex)
           example: d41d8cd9…098f00bc
         digests:
           type: array
+          description: Typed proof and discovery digests
           items:
             type: object
             required: [role, algorithm, transform, digestHex]
@@ -411,69 +415,77 @@ components:
         submissionMode:
           type: string
           enum: [server-computed, client-supplied]
+          description: How the registration was created
         tsaTimestamp:
           type: string
           format: date-time
-          description: UTC with millisecond precision
+          description: TSA timestamp (UTC, ms)
         tsaProvider:
           type: string
+          description: TSA provider that issued the token
         certificateUrl:
           type: string
+          description: Relative URL to download the certificate PDF
           example: /certificates/6d0915e7-4f86-4f99-987e-57f8f83e8354
         anchorConfirmationUrl:
           type: string
           format: uri
+          description: Public page for Bitcoin anchor status
           example: https://app.millihash.com/anchor/6d0915e7-4f86-4f99-987e-57f8f83e8354
         anchorState:
           type: string
           enum: [Pending, Stamped, Confirmed, Failed]
+          description: Current Bitcoin anchor job state
         anchoredCertificateUrl:
           type: string
-          description: Present only when anchorState is Confirmed
+          description: Present when `anchorState` is Confirmed
           example: /certificates/6d0915e7-4f86-4f99-987e-57f8f83e8354/anchored
         bitcoinBlockConfirmationTime:
           type: string
           format: date-time
-          description: Informational Bitcoin corroboration when present; TSA timestamp remains authoritative
+          description: Informational Bitcoin corroboration time when available
           example: 2026-02-01T00:00:00.000Z
         fingerprintSetVersion:
           type: string
-          description: Entitled discovery attempt-set version when producers ran
+          description: Discovery fingerprint producer set version when applicable
           nullable: true
         outdatedFingerprint:
           type: boolean
-          description: Present true when newer producers apply (FR20); omit when false
+          description: True when a newer producer set is available for this media type / plan
           enum: [true]
         projectId:
           type: string
           format: uuid
-          description: Present when Registration is a project chain version
+          description: Present when this registration is a project chain version
           nullable: true
         discoverability:
           type: string
           enum: [hidden, label_visible]
-          description: FR21 — present only when Registration is opted into similarity
+          description: Similarity visibility; present only when opted in
           nullable: true
         similarityIndexStatus:
           type: string
           enum: [pending, indexed, failed]
-          description: FR21 — present only when Registration is opted into similarity
+          description: Similarity index state; present only when opted in
           nullable: true
         c2pa:
           $ref: '#/components/schemas/C2paListingMetadata'
     RegistrationLabelPatchRequest:
       type: object
       additionalProperties: false
+      description: Any subset of mutable label fields
       properties:
         labelPublic:
           type: boolean
+          description: Show `label` on public verify responses (requires non-empty label)
         internalLabel:
           type: string
           nullable: true
+          description: Private name; size limited by plan `maxInternalLabelLength`
         discoverability:
           type: string
           enum: [hidden, label_visible]
-          description: FR21 — only valid on opted-in Registrations; otherwise SIMILARITY_NOT_OPTED_IN
+          description: Similarity result visibility; requires similarity opt-in
     RegistrationLabelPatchResponse:
       type: object
       required: [registrationId, label, labelPublic]
@@ -483,6 +495,7 @@ components:
           format: uuid
         label:
           type: string
+          description: Immutable label (unchanged by this patch)
         labelPublic:
           type: boolean
         internalLabel:
@@ -491,7 +504,7 @@ components:
         discoverability:
           type: string
           enum: [hidden, label_visible]
-          description: Echoed when Registration is FR21-opted; omitted otherwise
+          description: Echoed when similarity-opted; omitted otherwise
           nullable: true
     C2paListingMetadata:
       type: object
@@ -517,6 +530,7 @@ components:
           type: boolean
         trustNotice:
           type: string
+          description: Human-readable C2PA trust-list notice captured at registration
     ProjectListPage:
       type: object
       required: [items]
@@ -524,12 +538,13 @@ components:
         items:
           type: array
           maxItems: 50
+          description: Projects on this page
           items:
             $ref: '#/components/schemas/ProjectSummary'
         nextPageCursor:
           type: string
           nullable: true
-          description: Opaque cursor for next page; null when no further pages.
+          description: Cursor for the next page; null when done
     ProjectSummary:
       type: object
       required:
@@ -546,14 +561,18 @@ components:
         label:
           type: string
           nullable: true
+          description: Project display label when set
         headVersionNumber:
           type: integer
+          description: Current head version number
         headRegistrationId:
           type: string
           format: uuid
+          description: Registration id of the head version
         headContentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Head version commitment (use as CAS header when appending)
         versionCount:
           type: integer
         createdAt:
@@ -567,6 +586,7 @@ components:
           $ref: '#/components/schemas/ProjectSummary'
         versions:
           type: array
+          description: Ordered version timeline
           items:
             $ref: '#/components/schemas/ProjectVersionSummary'
     ProjectVersionSummary:
@@ -590,13 +610,16 @@ components:
         documentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Primary proof digest for this version
         contentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Version commitment hex
         prevContentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
           nullable: true
+          description: Prior version commitment; null on genesis
         tsaTimestamp:
           type: string
           format: date-time

@@ -1,19 +1,23 @@
 openapi: 3.0.3
 info:
-  title: MilliHash GET /me/plan
+  title: MilliHash Plan API
   version: 1.0.0
+  description: Current subscription plan and size ceilings for the authenticated caller.
 paths:
   /me/plan:
     get:
       operationId: getMePlan
-      summary: Current RapidAPI subscription plan and upload / query ceilings
+      summary: Get current plan limits
+      description: |
+        Returns the caller's subscription plan and byte ceilings for asset upload
+        and similarity query text.
       tags:
         - Plan
       security:
         - RapidApiKey: []
       responses:
         "200":
-          description: Plan projection for the caller
+          description: Plan and limits for the authenticated caller
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -24,7 +28,7 @@ paths:
                 maxSimilarityQuerySize: 65536
                 nextPlan: PRO
         "401":
-          description: Missing or invalid RapidAPI gateway identity
+          description: Authentication required
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -43,18 +47,20 @@ components:
         plan:
           type: string
           enum: [BASIC, PRO, ULTRA, MEGA]
+          description: Current plan tier
         maxAssetUploadSize:
           type: integer
           format: int64
           minimum: 1
+          description: Max server-computed asset size in bytes (file or UTF-8 text)
         maxSimilarityQuerySize:
           type: integer
           format: int64
           minimum: 1
-          description: Similarity query ceiling in UTF-8 bytes (OHS-008)
+          description: Max similarity search query size in UTF-8 bytes (after normalization)
         nextPlan:
           nullable: true
-          description: Next upgrade tier, or null when MEGA
+          description: Next upgrade tier, or null on MEGA
           oneOf:
             - type: string
               enum: [PRO, ULTRA, MEGA]

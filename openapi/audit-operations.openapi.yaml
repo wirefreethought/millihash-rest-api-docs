@@ -1,61 +1,68 @@
 openapi: 3.1.0
 info:
-  title: MilliHash Admin Audit API (fragment)
+  title: MilliHash Admin Audit API
   version: 1.0.0
+  description: Operator audit event search (Auth0 JWT on the app host).
 paths:
   /admin/audit:
     get:
       operationId: searchAuditEvents
-      summary: Search and filter audit events (read-only)
+      summary: Search audit events
       description: |
-        Operator audit console. Filters AND together; omitted parameters are wildcards.
-        Paginated; max 200 items per page. Requires Auth0 JWT with `audit:read` claim on
-        `app.millihash.com` — not a RapidAPI route.
+        Read-only audit search. Filters AND together; omitted parameters are wildcards.
+        Paginated; max 200 items per page. Requires Auth0 JWT with `audit:read`.
       tags:
         - Admin Audit
       servers:
         - url: https://app.millihash.com
-          description: Operator admin console (Auth0 JWT)
+          description: Operator admin console
       security:
         - Auth0Bearer: []
       parameters:
         - name: eventType
           in: query
           required: false
+          description: Exact event type filter
           schema:
             type: string
         - name: from
           in: query
           required: false
+          description: Inclusive lower bound on `occurredAt` (ISO-8601)
           schema:
             type: string
             format: date-time
         - name: to
           in: query
           required: false
+          description: Inclusive upper bound on `occurredAt` (ISO-8601)
           schema:
             type: string
             format: date-time
         - name: hash
           in: query
           required: false
+          description: Proof digest hex associated with the event
           schema:
             type: string
             pattern: '^[0-9a-f]{64}$'
         - name: certificateId
           in: query
           required: false
+          description: Certificate UUID associated with the event
           schema:
             type: string
             format: uuid
         - name: userId
           in: query
           required: false
+          description: Actor / registrant user id
           schema:
             type: string
         - name: cursor
           in: query
           required: false
+          description: Opaque cursor from a prior `nextPageCursor`
           schema:
             type: string
       responses:
@@ -72,7 +79,7 @@ paths:
               schema:
                 $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
         '403':
-          description: Valid JWT but missing audit:read claim
+          description: Valid JWT but missing `audit:read`
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -89,7 +96,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Auth0 access token with audit:read claim — operator console only
+      description: Auth0 access token with `audit:read`
   schemas:
     AuditSearchResponse:
       type: object
@@ -98,25 +105,33 @@ components:
         items:
           type: array
           maxItems: 200
+          description: Events on this page
           items:
             type: object
             required: [eventType, occurredAt]
             properties:
               eventType:
                 type: string
+                description: Audit event type
               occurredAt:
                 type: string
                 format: date-time
+                description: When the event occurred
               hash:
                 type: string
+                description: Associated proof digest when applicable
               certificateId:
                 type: string
                 format: uuid
+                description: Associated certificate when applicable
               userId:
                 type: string
+                description: Actor / registrant user id when applicable
         nextPageCursor:
           type: string
           nullable: true
+          description: Cursor for the next page; null when done
         resultCount:
           type: integer
           minimum: 0
+          description: Number of items in this page

@@ -1,17 +1,16 @@
 openapi: 3.1.0
 info:
-  title: MilliHash Similarity Search (FR21)
+  title: MilliHash Similarity Search
   version: 1.0.0
   description: |
-    Opt-in semantic text similarity over MilliHash registrations only. Candidates are never proof —
-    confirm with deterministic hash verification (FR2). Responses never include passage text, content,
-    registrant name/email, or any contact/relay field.
-    Versioning via vendor MIME `application/vnd.millihash.v1+json` (default when omitted).
+    Opt-in semantic text similarity over MilliHash registrations. Matches are **candidates only**,
+    never proof — confirm with deterministic hash verification (`POST /verify`).
+    Responses never include passage text, full content, or registrant contact fields.
 servers:
   - url: https://free-api.millihash.io
-    description: Direct public ingress (anonymous)
+    description: Free / public API
   - url: https://millihash.p.rapidapi.com
-    description: RapidAPI ingress (authenticated)
+    description: Authenticated API
 tags:
   - name: Similarity Search
 paths:
@@ -21,14 +20,15 @@ paths:
       operationId: searchSimilarity
       security:
         - RapidApiKey: []
-      summary: Document-level similarity search (RapidAPI authenticated)
+      summary: Search similar registrations
       description: |
-        Requires RapidAPI identity (HTTP 401 without). The caller's own records appear as rows.
-        Other registrants' `hidden` matches count only toward `privateMatchCount` (idea mode) and are dropped in
-        wording mode. Query text is normalized (`text-normalized-v2`) before size check, cache lookup, and inference.
-        Process-local LRU may satisfy repeat searches without embed/DB. Size uses plan `maxSimilarityQuerySize`
-        on normalized UTF-8 bytes. Results are paged (default `limit` 10, max 50); pass `cursor` from a prior
-        `nextPageCursor` for the next page.
+        Embed the query and return ranked opted-in registrations as similarity candidates.
+
+        - Your own registrations can appear as normal rows (`isOwn`).
+        - In **idea** mode, other users' `hidden` hits contribute only to `privateMatchCount`.
+        - In **wording** mode, those hidden hits are omitted entirely.
+        - Query text is normalized (`text-normalized-v2`) before size checks and embedding.
+        - Page with `limit` (default 10, max 50) and `cursor` from a prior `nextPageCursor`.
       requestBody:
         required: true
         content:
@@ -37,25 +37,28 @@ paths:
             example: { query: "An essay about tidal energy along rocky coasts.", mode: idea, includeSamples: false, limit: 10 }
       responses:
         '200':
-          description: Search completed (results may be empty)
+          description: Ranked results (may be empty)
           content:
             application/vnd.millihash.v1+json:
               schema: { $ref: '#/components/schemas/SimilaritySearchResponse' }
-        '400': { $ref: '#/components/responses/Error', description: 'QUERY_EMPTY | INVALID_SEARCH_MODE | INVALID_LIMIT (incl. minCosine) | INVALID_CURSOR' }
+        '400': { $ref: '#/components/responses/Error', description: 'QUERY_EMPTY | INVALID_SEARCH_MODE | INVALID_LIMIT | INVALID_CURSOR' }
         '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
-        '413': { $ref: '#/components/responses/Error', description: 'QUERY_TOO_LARGE (names limit and next plan)' }
+        '413': { $ref: '#/components/responses/Error', description: 'QUERY_TOO_LARGE' }
         '429': { $ref: '#/components/responses/Error', description: 'RATE_LIMITED' }
-        '503': { $ref: '#/components/responses/Error', description: 'SIMILARITY_UNAVAILABLE (embedding provider); Retry-After set' }
+        '503': { $ref: '#/components/responses/Error', description: 'SIMILARITY_UNAVAILABLE (Retry-After set)' }
   /samples/similarity:
     get:
       tags: [Similarity Search]
       operationId: listSimilaritySamples
       security:
         - RapidApiKey: []
-      summary: Built-in MilliHash-authored similarity samples (RapidAPI authenticated)
+      summary: List built-in similarity samples
+      description: |
+        Returns MilliHash-authored sample passages with paraphrase, weak, and unrelated
+        query variants for trying search without registering your own text.
       responses:
         '200':
-          description: 5–10 samples with paraphrase / weak / unrelated query triples
+          description: Sample set (5–10 items)
           content:
             application/vnd.millihash.v1+json:
               schema: { $ref: '#/components/schemas/SimilaritySamplesResponse' }
@@ -64,12 +67,21 @@ paths:
     get:
       tags: [Similarity Search]
       operationId: getSimilarityOverlap
-      summary: Post-201 overlap note for an owned opted-in registration (RapidAPI)
+      security:
+        - RapidApiKey: []
+      summary: Overlap for an owned opted-in registration
+      description: |
+        After you opt a registration into similarity, returns earlier candidates that overlap
+        it. While indexing `status` is `pending`, `results` are empty. Caller must own the registration.
       parameters:
-        - { name: registrationId, in: path, required: true, schema: { type: string } }
+        - name: registrationId
+          in: path
+          required: true
+          description: Registration to check (must be yours and similarity-opted-in)
+          schema: { type: string }
       responses:
         '200':
-          description: Overlap lookup; `pending` returns no results; earlier candidates only
+          description: Overlap status and optional candidate rows
           content:
             application/vnd.millihash.v1+json:
               schema: { $ref: '#/components/schemas/SimilarityOverlapResponse' }
@@ -82,10 +94,10 @@ components:
       type: apiKey
       in: header
       name: X-RapidAPI-Key
-      description: Validated at RapidAPI gateway; backend trusts injected identity headers
+      description: API key identifying the caller
   responses:
     Error:
-      description: Uniform WFT error envelope
+      description: Error envelope
       content:
         application/vnd.millihash.v1+json:
           schema: { $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope' }
@@ -95,75 +107,149 @@ components:
       required: [query]
       additionalProperties: false
       properties:
-        query: { type: string, description: 'UTF-8 text; blank → QUERY_EMPTY; size ≤ plan maxSimilarityQuerySize' }
-        mode: { type: string, enum: [idea, wording], default: idea }
-        includeSamples: { type: boolean, default: false }
-        limit: { type: integer, minimum: 1, maximum: 50, default: 10, description: Page size }
+        query:
+          type: string
+          description: UTF-8 search text. Blank → 400 QUERY_EMPTY. Size limited by plan maxSimilarityQuerySize after normalization.
+        mode:
+          type: string
+          enum: [idea, wording]
+          default: idea
+          description: |
+            `idea` — semantic / topical similarity (lower cosine floor).
+            `wording` — near-duplicate wording (higher cosine floor); drops others' hidden matches.
+        includeSamples:
+          type: boolean
+          default: false
+          description: When true, include MilliHash sample documents in the candidate pool.
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+          description: Max rows in this page.
         minCosine:
           type: number
           minimum: 0
           maximum: 1
-          description: >
-            Optional cosine floor for close matches. When omitted, idea mode uses
-            close-match-threshold (default 0.82) and wording mode uses wording-threshold
-            (default 0.95).
+          description: |
+            Optional cosine floor for a hit. When omitted, idea uses ~0.82 and wording uses ~0.95.
         cursor:
           type: string
-          description: Opaque page cursor from a prior nextPageCursor (Next page).
+          description: Opaque cursor from a previous `nextPageCursor` for the next page.
     SimilarityResultRow:
       type: object
       required: [registrationId, recordedAt, coarseScore, matchedPassageShare, meanBestCosine, candidateOnly]
       additionalProperties: false
       properties:
-        registrationId: { type: string }
-        recordedAt: { type: string, format: date-time, description: TSA timestamp (ISO-8601 ms UTC) }
-        coarseScore: { type: number, minimum: 0, maximum: 1, multipleOf: 0.1, description: 'floor(matchedPassageShare × 10) / 10' }
-        matchedPassageShare: { type: number, minimum: 0, maximum: 1 }
+        registrationId:
+          type: string
+          description: Matching registration id
+        recordedAt:
+          type: string
+          format: date-time
+          description: Registration TSA timestamp (ISO-8601, ms UTC)
+        coarseScore:
+          type: number
+          minimum: 0
+          maximum: 1
+          multipleOf: 0.1
+          description: Share-based score, floored to tenths (`floor(matchedPassageShare × 10) / 10`)
+        matchedPassageShare:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Fraction of query passages that found a close match
         meanBestCosine:
           type: number
           minimum: 0
           maximum: 1
-          description: >
-            Mean of best close-match cosines across matched query passages
-            (similarity strength). Prefer this for UI score display; coarseScore
-            is share-based and is 1.0 for any single-passage query that hits.
-        candidateOnly: { type: boolean, const: true }
-        label: { type: string, description: 'Only for label_visible rows with non-empty label, or own rows' }
-        isSample: { type: boolean }
-        isOwn: { type: boolean }
+          description: Mean of best close-match cosines — prefer this for “how similar” UI
+        candidateOnly:
+          type: boolean
+          const: true
+          description: Always true — similarity is never proof
+        label:
+          type: string
+          description: Present for your rows, or others with `label_visible` and a non-empty label
+        isSample:
+          type: boolean
+          description: True when the row is a built-in MilliHash sample
+        isOwn:
+          type: boolean
+          description: True when the row is your registration
     SimilaritySearchResponse:
       type: object
       required: [results, privateMatchCount, comparedAgainstCount, message, modelVersion]
       additionalProperties: false
       properties:
-        results: { type: array, items: { $ref: '#/components/schemas/SimilarityResultRow' } }
-        privateMatchCount: { type: integer, minimum: 0 }
-        comparedAgainstCount: { type: integer, minimum: 0 }
-        message: { type: string, example: 'Compared against 42 opted-in registrations on MilliHash.' }
-        modelVersion: { type: string }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/SimilarityResultRow' }
+          description: Ranked candidate rows for this page
+        privateMatchCount:
+          type: integer
+          minimum: 0
+          description: Count of other users' hidden matches (idea mode); not listed as rows
+        comparedAgainstCount:
+          type: integer
+          minimum: 0
+          description: How many opted-in registrations were compared
+        message:
+          type: string
+          example: 'Compared against 42 opted-in registrations on MilliHash.'
+          description: Human-readable summary of the comparison scope
+        modelVersion:
+          type: string
+          description: Embedding model version used for this search
         nextPageCursor:
           type: string
-          description: Present when more ranked hits remain; pass as request.cursor for the next page.
+          description: Present when more hits remain; pass as `cursor` on the next request
     SimilarityOverlapResponse:
       type: object
       required: [status]
       additionalProperties: false
       properties:
-        status: { type: string, enum: [pending, indexed, failed] }
-        results: { type: array, items: { $ref: '#/components/schemas/SimilarityResultRow' } }
-        privateMatchCount: { type: integer, minimum: 0 }
+        status:
+          type: string
+          enum: [pending, indexed, failed]
+          description: Indexing state of the registration
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/SimilarityResultRow' }
+          description: Earlier overlapping candidates (empty while pending)
+        privateMatchCount:
+          type: integer
+          minimum: 0
+          description: Hidden overlaps not returned as rows
     SimilaritySample:
       type: object
       required: [id, label, text, paraphrase, weak, unrelated]
       properties:
-        id: { type: string }
-        label: { type: string }
-        text: { type: string }
-        paraphrase: { type: string }
-        weak: { type: string }
-        unrelated: { type: string }
+        id:
+          type: string
+          description: Sample id
+        label:
+          type: string
+          description: Short display label
+        text:
+          type: string
+          description: Canonical sample passage
+        paraphrase:
+          type: string
+          description: Strong paraphrase query that should match
+        weak:
+          type: string
+          description: Weakly related query
+        unrelated:
+          type: string
+          description: Unrelated query that should not match strongly
     SimilaritySamplesResponse:
       type: object
       required: [samples]
       properties:
-        samples: { type: array, minItems: 5, maxItems: 10, items: { $ref: '#/components/schemas/SimilaritySample' } }
+        samples:
+          type: array
+          minItems: 5
+          maxItems: 10
+          items: { $ref: '#/components/schemas/SimilaritySample' }
+          description: Built-in samples for try-out searches

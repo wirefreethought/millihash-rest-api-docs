@@ -8,9 +8,7 @@ components:
       type: apiKey
       in: header
       name: X-RapidAPI-Key
-      description: |
-        RapidAPI subscriber key. Validated by the RapidAPI gateway before the
-        request reaches MilliHash. MilliHash trusts X-RapidAPI-User injected by the gateway.
+      description: API key identifying the caller
   schemas:
     ErrorEnvelope:
       type: object

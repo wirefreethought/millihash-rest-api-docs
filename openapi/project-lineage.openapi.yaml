@@ -3,23 +3,19 @@ info:
   title: MilliHash Project Lineage API
   version: 1.0.0
   description: |
-    FR13 — Create a Project (genesis version).
-    FR14 — Append a Project Version.
-    Authenticated RapidAPI ingress only (pro instance).
-    Request body schemas reuse FR1 registration shapes — see registrations.openapi.yaml.
+    Create projects and append versions. Request bodies reuse registration create shapes
+    (see `registrations.openapi.yaml`).
 servers:
-  - url: https://api.millihash.com
-    description: Pro instance (RapidAPI proxy ingress only)
+  - url: https://millihash.p.rapidapi.com
+    description: Authenticated API
 paths:
   /projects:
     post:
       operationId: createProject
-      summary: Create a project with genesis version
+      summary: Create a project (genesis version)
       description: |
-        Creates a Project and version 1 Registration. Genesis `contentHash` equals the version
-        commitment over proof digests; primary `documentHash` is the designated proof digest.
-        Same multipart/JSON submission modes as FR1 (including `label` / `labelPublic` / `internalLabel`).
-        Consumes one plan quota unit.
+        Creates a project and version 1 registration from the same JSON/multipart shapes as
+        `POST /registrations`. Consumes one registration quota unit.
       tags:
         - Project Lineage
       security:
@@ -69,10 +65,10 @@ paths:
   /projects/{projectId}/versions:
     post:
       operationId: appendProjectVersion
-      summary: Append a version to an existing project
+      summary: Append a project version
       description: |
-        Appends version N+1 with chained `contentHash`. Requires optimistic concurrency header
-        `X-Project-Head-Content-Hash` matching the project's current head.
+        Adds version N+1 with a chained `contentHash`. Send `X-Project-Head-Content-Hash`
+        equal to the current head commitment or the request fails with a head conflict (409).
       tags:
         - Project Lineage
       security:
@@ -81,6 +77,7 @@ paths:
         - name: projectId
           in: path
           required: true
+          description: Project to append to (must be yours)
           schema:
             type: string
             format: uuid
@@ -90,7 +87,7 @@ paths:
           schema:
             type: string
             pattern: '^[0-9a-f]{64}$'
-          description: Expected current head contentHash for CAS
+          description: Current head `contentHash` (optimistic concurrency / CAS)
       requestBody:
         required: true
         content:
@@ -151,35 +148,44 @@ components:
         projectId:
           type: string
           format: uuid
+          description: New project id
         label:
           type: string
           nullable: true
+          description: Immutable display label from create
         labelPublic:
           type: boolean
         internalLabel:
           type: string
           nullable: true
+          description: Private name
         registrationId:
           type: string
           format: uuid
+          description: Genesis version registration id
         versionNumber:
           type: integer
           const: 1
+          description: Always 1 for genesis
         documentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Primary proof digest
         digests:
           type: array
+          description: Typed digests for the genesis version
           items:
             $ref: 'registrations.openapi.yaml#/components/schemas/ContentDigest'
         contentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: Version commitment over proof digests
+          description: Version commitment over proof digests (use as CAS header when appending)
         certificateUrl:
           type: string
+          description: Relative URL to the genesis certificate PDF
         chainVerifyUrl:
           type: string
+          description: Public chain-verify path
           example: /projects/{projectId}/chain/verify
     VersionAppendedResponse:
       type: object
@@ -199,12 +205,15 @@ components:
         registrationId:
           type: string
           format: uuid
+          description: New version registration id
         versionNumber:
           type: integer
           minimum: 2
+          description: Appended version number (N+1)
         documentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: Primary proof digest for this version
         digests:
           type: array
           items:
@@ -212,9 +221,11 @@ components:
         contentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: SHA-256(commitmentBytes ‖ prevContentHash)
+          description: Chained version commitment (`SHA-256(commitmentBytes ‖ prevContentHash)`)
         headContentHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
+          description: New head commitment after append (same as `contentHash`)
         certificateUrl:
           type: string
+          description: Relative URL to this version's certificate PDF
