@@ -13,11 +13,11 @@ servers:
   - url: https://millihash.p.rapidapi.com
     description: RapidAPI ingress (authenticated)
 tags:
-  - name: similarity
+  - name: Similarity Search
 paths:
   /similarity/searches:
     post:
-      tags: [similarity]
+      tags: [Similarity Search]
       operationId: searchSimilarity
       security:
         - RapidApiKey: []
@@ -48,7 +48,7 @@ paths:
         '503': { $ref: '#/components/responses/Error', description: 'SIMILARITY_UNAVAILABLE (embedding provider); Retry-After set' }
   /samples/similarity:
     get:
-      tags: [similarity]
+      tags: [Similarity Search]
       operationId: listSimilaritySamples
       security:
         - RapidApiKey: []
@@ -62,7 +62,7 @@ paths:
         '401': { $ref: '#/components/responses/Error', description: AUTH_REQUIRED }
   /registrations/{registrationId}/similarity-overlap:
     get:
-      tags: [similarity]
+      tags: [Similarity Search]
       operationId: getSimilarityOverlap
       summary: Post-201 overlap note for an owned opted-in registration (RapidAPI)
       parameters:
