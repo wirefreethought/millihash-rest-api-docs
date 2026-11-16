@@ -15,7 +15,7 @@ info:
       (`POST/GET /registrations`, certificate download) are disabled on the free deployment.
     - **Pro instance** — reachable only through the RapidAPI proxy
       (`https://millihash.p.rapidapi.com`, `X-RapidAPI-Host: millihash.p.rapidapi.com`). Serves
-      RapidAPI-authenticated registration, project, owner-portfolio, and FR21 similarity
+      RapidAPI-authenticated registration, project, registrant-portfolio, and FR21 similarity
       (overlap / watches / alerts) routes, plus every public verification and similarity
       search/sample route, so RapidAPI subscribers can call the whole API with one key.
 
@@ -45,8 +45,8 @@ tags:
     description: Asset hash registration (pro / RapidAPI only)
   - name: Project Lineage
     description: Project create and version append (pro / RapidAPI only)
-  - name: Owner Portfolio
-    description: Owner registry, projects, and certificate download (pro / RapidAPI only)
+  - name: Registrant Portfolio
+    description: Registrant registry, projects, and certificate download (pro / RapidAPI only)
   - name: Public Verification
     description: Asset, certificate, and anchor verification, plus public stats and sample proof (free instance, and pro via RapidAPI)
   - name: Admin Audit
@@ -59,24 +59,24 @@ tags:
 paths:
   /registrations:
     get:
-      $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1registrations/get'
+      $ref: 'openapi/registrant-portfolio.openapi.yaml#/paths/~1registrations/get'
     post:
       $ref: 'openapi/registrations.openapi.yaml#/paths/~1registrations/post'
   /registrations/{registrationId}:
     patch:
-      $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1registrations~1{registrationId}/patch'
+      $ref: 'openapi/registrant-portfolio.openapi.yaml#/paths/~1registrations~1{registrationId}/patch'
   /certificates/{certificateId}:
-    $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}'
+    $ref: 'openapi/registrant-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}'
   /certificates/{certificateId}/anchored:
-    $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}~1anchored'
+    $ref: 'openapi/registrant-portfolio.openapi.yaml#/paths/~1certificates~1{certificateId}~1anchored'
   /projects:
     get:
-      $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1projects/get'
+      $ref: 'openapi/registrant-portfolio.openapi.yaml#/paths/~1projects/get'
     post:
       $ref: 'openapi/project-lineage.openapi.yaml#/paths/~1projects/post'
   /projects/{projectId}:
     get:
-      $ref: 'openapi/owner-portfolio.openapi.yaml#/paths/~1projects~1{projectId}/get'
+      $ref: 'openapi/registrant-portfolio.openapi.yaml#/paths/~1projects~1{projectId}/get'
   /projects/{projectId}/versions:
     post:
       $ref: 'openapi/project-lineage.openapi.yaml#/paths/~1projects~1{projectId}~1versions/post'
@@ -132,21 +132,21 @@ components:
     DuplicateRegistrationResponse:
       $ref: 'openapi/registrations.openapi.yaml#/components/schemas/DuplicateRegistrationResponse'
     RegistrationLabelPatchRequest:
-      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/RegistrationLabelPatchRequest'
+      $ref: 'openapi/registrant-portfolio.openapi.yaml#/components/schemas/RegistrationLabelPatchRequest'
     RegistrationLabelPatchResponse:
-      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/RegistrationLabelPatchResponse'
+      $ref: 'openapi/registrant-portfolio.openapi.yaml#/components/schemas/RegistrationLabelPatchResponse'
     ProjectCreatedResponse:
       $ref: 'openapi/project-lineage.openapi.yaml#/components/schemas/ProjectCreatedResponse'
     VersionAppendedResponse:
       $ref: 'openapi/project-lineage.openapi.yaml#/components/schemas/VersionAppendedResponse'
     ProjectListPage:
-      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/ProjectListPage'
+      $ref: 'openapi/registrant-portfolio.openapi.yaml#/components/schemas/ProjectListPage'
     ProjectDetail:
-      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/ProjectDetail'
+      $ref: 'openapi/registrant-portfolio.openapi.yaml#/components/schemas/ProjectDetail'
     ChainVerificationOutcome:
       $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/ChainVerificationOutcome'
     RegistryListingResponse:
-      $ref: 'openapi/owner-portfolio.openapi.yaml#/components/schemas/RegistryListingResponse'
+      $ref: 'openapi/registrant-portfolio.openapi.yaml#/components/schemas/RegistryListingResponse'
     AssetVerificationResponse:
       $ref: 'openapi/public-verification.openapi.yaml#/components/schemas/AssetVerificationResponse'
     CertificateVerificationResponse:

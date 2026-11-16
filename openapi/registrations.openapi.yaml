@@ -7,8 +7,8 @@ info:
     Error envelope shape published by api-platform (002-api-platform).
 
     Multi-digest + labels: create returns typed `digests[]` and label fields.
-    Mutable `labelPublic` / `internalLabel` after create are owned by owner-portfolio
-    via PATCH /registrations/{registrationId} (owner-portfolio OpenAPI) — not FR1 POST.
+    Mutable `labelPublic` / `internalLabel` after create are owned by registrant-portfolio
+    via PATCH /registrations/{registrationId} (registrant-portfolio OpenAPI) — not FR1 POST.
 servers:
   - url: https://api.millihash.com
     description: Production API (RapidAPI authenticated ingress for FR1)
@@ -24,7 +24,7 @@ paths:
         rejected; a different registrant succeeds with a prior-registration notice), persist Registration,
         enqueue AnchorJob. Asset bytes are never stored. Client-supplied mode accepts hash hex
         only (no file upload). Optional immutable `label`; optional `labelPublic` (default false);
-        optional `internalLabel` (owner-only).
+        optional `internalLabel` (registrant-only).
       tags:
         - Registrations
       security:
@@ -93,8 +93,8 @@ paths:
       operationId: createFingerprintRefresh
       summary: Refresh discovery fingerprints for a registration (FR20)
       description: |
-        Registrant-only (authenticated `OwnerKey` must equal the registration's owner, else 403
-        `NOT_REGISTRATION_OWNER`). Re-upload the original asset using the **same content transport as FR1
+        Registrant-only (authenticated `RegistrantKey` must equal the registration's owner, else 403
+        `NOT_ASSET_REGISTRANT`). Re-upload the original asset using the **same content transport as FR1
         server-computed**: multipart `file` + optional form `mediaType` (resolve or 400), or JSON `{ text }`
         (UTF-8; no body contentType). Create-only fields (`submissionMode`, `registrantRole`, `label`,
         `labelPublic`, `internalLabel`) are ignored if present. Succeeds when **any** recomputed proof digest
@@ -157,7 +157,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
           description: |
-            `NOT_REGISTRATION_OWNER` (caller is not the registrant) or `FINGERPRINT_NOT_ENTITLED` (zero entitled
+            `NOT_ASSET_REGISTRANT` (caller is not the registrant) or `FINGERPRINT_NOT_ENTITLED` (zero entitled
             discovery producers for plan + media type — plan-upgrade signal)
           content:
             application/vnd.millihash.v1+json:
@@ -199,7 +199,7 @@ components:
       description: Validated at RapidAPI gateway; backend trusts injected identity headers
   schemas:
     ErrorEnvelope:
-      $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
+      $ref: '../002-api-platform/contracts/error-envelope.schema.json'
     ContentDigest:
       type: object
       required: [role, algorithm, transform, digestHex]
@@ -252,7 +252,7 @@ components:
           description: Forced false when label empty; mutable later via PATCH (FR3)
         internalLabel:
           type: string
-          description: Owner-only private name; never on certificates or public APIs
+          description: Registrant-only private name; never on certificates or public APIs
         mediaType:
           type: string
           description: |
@@ -392,7 +392,7 @@ components:
         internalLabel:
           type: string
           nullable: true
-          description: Owner-only; present on authenticated create response
+          description: Registrant-only; present on authenticated create response
         discoverability:
           type: string
           enum: [hidden, label_visible]

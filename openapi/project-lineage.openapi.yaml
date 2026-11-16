@@ -114,7 +114,7 @@ paths:
               schema:
                 $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
         '403':
-          description: Not project owner
+          description: Not project registrant
           content:
             application/vnd.millihash.v1+json:
               schema:

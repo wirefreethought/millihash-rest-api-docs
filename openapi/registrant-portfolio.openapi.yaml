@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: MilliHash Owner Portfolio API
+  title: MilliHash Registrant Portfolio API
   version: 1.0.0
   description: |
-    Owner registry listing, certificate download, and owner project list/detail.
+    Registrant registry listing, certificate download, and registrant project list/detail.
     Authenticated RapidAPI ingress only. Error envelope from api-platform.
 servers:
   - url: https://api.millihash.com
@@ -11,13 +11,13 @@ servers:
 paths:
   /projects:
     get:
-      operationId: listOwnerProjects
+      operationId: listRegistrantProjects
       summary: List projects owned by the authenticated user
       description: |
-        Owner-scoped project list. Page size 50, ordered by createdAt DESC then projectId ASC.
+        Registrant-scoped project list. Page size 50, ordered by createdAt DESC then projectId ASC.
         Opaque HMAC-signed cursor pagination via `cursor` / `nextPageCursor` (same pattern as registry).
       tags:
-        - Owner Portfolio
+        - Registrant Portfolio
       security:
         - RapidApiKey: []
       parameters:
@@ -48,11 +48,11 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /projects/{projectId}:
     get:
-      operationId: getOwnerProject
+      operationId: getRegistrantProject
       summary: Get project detail with version timeline
-      description: Owner-scoped project detail including ordered version summaries.
+      description: Registrant-scoped project detail including ordered version summaries.
       tags:
-        - Owner Portfolio
+        - Registrant Portfolio
       security:
         - RapidApiKey: []
       parameters:
@@ -76,7 +76,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
-          description: Not project owner
+          description: Not project registrant
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -89,10 +89,10 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /registrations:
     get:
-      operationId: listOwnerRegistrations
+      operationId: listRegistrantRegistrations
       summary: List Registrations owned by the authenticated user
       description: |
-        Owner-scoped, cursor-paginated registry dashboard. Fixed page size 50.
+        Registrant-scoped, cursor-paginated registry dashboard. Fixed page size 50.
         Default sort: `tsaTimestamp` descending, `registrationId` ascending tie-break.
         Optional `sort`: `label` (display-name semantics: internalLabel then label; default ascending),
         `bitcoinBlockConfirmationTime` (default descending), or `tsaTimestamp`.
@@ -102,7 +102,7 @@ paths:
         Listing does not invoke per-row anchor lookup.
         Rows include digests, label, labelPublic, internalLabel, and displayName.
       tags:
-        - Owner Portfolio
+        - Registrant Portfolio
       security:
         - RapidApiKey: []
       parameters:
@@ -131,7 +131,7 @@ paths:
             enum: [asc, desc]
       responses:
         '200':
-          description: Owner registry page
+          description: Registrant registry page
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -154,7 +154,7 @@ paths:
   /registrations/{registrationId}:
     patch:
       operationId: patchRegistrationLabels
-      summary: Update owner label metadata
+      summary: Update registrant label metadata
       description: |
         Accepts any subset of `labelPublic`, `internalLabel`, and `discoverability` (`hidden` |
         `label_visible`). Immutable `label` and proof digests MUST NOT be accepted.
@@ -163,7 +163,7 @@ paths:
         `SIMILARITY_NOT_OPTED_IN`. Oversized `internalLabel` → HTTP 400
         `INTERNAL_LABEL_TOO_LARGE` (plan `maxInternalLabelLength`).
       tags:
-        - Owner Portfolio
+        - Registrant Portfolio
       security:
         - RapidApiKey: []
       parameters:
@@ -202,7 +202,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
-          description: Not registration owner
+          description: Not asset registrant
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -219,10 +219,10 @@ paths:
       summary: Download Certificate PDF
       description: |
         Renders the Certificate PDF on demand from the Registration projection. With a fixed renderer version,
-        repeated downloads produce byte-identical PDFs. Owner must match stored OwnerKey.
+        repeated downloads produce byte-identical PDFs. Registrant must match stored RegistrantKey.
         Response is raw PDF bytes (not JSON).
       tags:
-        - Owner Portfolio
+        - Registrant Portfolio
       security:
         - RapidApiKey: []
       parameters:
@@ -257,7 +257,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
-          description: Authenticated user is not Registration owner
+          description: Authenticated user is not the asset registrant
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -274,9 +274,9 @@ paths:
       summary: Download anchored Certificate PDF
       description: |
         Renders the Layer-1 + Bitcoin Anchor Certificate PDF on demand when AnchorJob is Confirmed.
-        Returns 409 ANCHOR_NOT_CONFIRMED when Pending, Stamped, or Failed. Owner must match stored OwnerKey.
+        Returns 409 ANCHOR_NOT_CONFIRMED when Pending, Stamped, or Failed. Registrant must match stored RegistrantKey.
       tags:
-        - Owner Portfolio
+        - Registrant Portfolio
       security:
         - RapidApiKey: []
       parameters:
@@ -310,7 +310,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
-          description: Authenticated user is not Registration owner
+          description: Authenticated user is not the asset registrant
           content:
             application/vnd.millihash.v1+json:
               schema:
@@ -334,7 +334,7 @@ components:
   schemas:
     ErrorEnvelope:
       $ref: 'common.openapi.yaml#/components/schemas/ErrorEnvelope'
-    OwnerKey:
+    RegistrantKey:
       type: object
       required: [identityProvider, userId]
       properties:
@@ -361,7 +361,7 @@ components:
       type: object
       required:
         - registrationId
-        - ownerKey
+        - registrantKey
         - label
         - labelPublic
         - displayName
@@ -377,8 +377,8 @@ components:
         registrationId:
           type: string
           format: uuid
-        ownerKey:
-          $ref: '#/components/schemas/OwnerKey'
+        registrantKey:
+          $ref: '#/components/schemas/RegistrantKey'
         label:
           type: string
           nullable: true
@@ -386,7 +386,7 @@ components:
           type: boolean
         internalLabel:
           type: string
-          description: Owner-only private name; never on certificates or public verify
+          description: Registrant-only private name; never on certificates or public verify
         displayName:
           type: string
           description: internalLabel if non-empty, else label
