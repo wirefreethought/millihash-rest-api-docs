@@ -41,6 +41,8 @@ servers:
     description: Operator admin console (Auth0 JWT)
 
 tags:
+  - name: Admin Audit
+    description: Operator audit search (Auth0 JWT on app host — not RapidAPI)
   - name: Registrations
     description: Asset hash registration (pro / RapidAPI only)
   - name: Project Lineage
@@ -49,9 +51,7 @@ tags:
     description: Registrant registry, projects, and certificate download (pro / RapidAPI only)
   - name: Public Verification
     description: Asset, certificate, and anchor verification, plus public stats and sample proof (free instance, and pro via RapidAPI)
-  - name: Admin Audit
-    description: Operator audit search (Auth0 JWT on app host — not RapidAPI)
-  - name: similarity
+  - name: Similarity Search
     description: Opt-in semantic text similarity search and samples (FR21; RapidAPI / pro only)
 
 paths:
